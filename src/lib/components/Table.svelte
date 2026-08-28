@@ -16,6 +16,7 @@
 	import MeldPanel from './MeldPanel.svelte';
 	import Scoreboard from './Scoreboard.svelte';
 	import GameOver from './GameOver.svelte';
+	import LogFeed from './LogFeed.svelte';
 
 	let { store, presence, host }: { store: GameStore; presence: Presence; host: Host } = $props();
 
@@ -87,6 +88,52 @@
 			return () => clearTimeout(id);
 		}
 	});
+
+	// pulse the plate of whoever just took a trick
+	let flashSeat = $state<Seat | null>(null);
+	let seenTricks = 0;
+	$effect(() => {
+		const total = doc ? doc.wonBySeat.reduce((n, w) => n + w.length, 0) : 0;
+		if (total > seenTricks && doc?.lastTrickWinner != null) {
+			flashSeat = doc.lastTrickWinner;
+			const id = setTimeout(() => (flashSeat = null), 850);
+			seenTricks = total;
+			return () => clearTimeout(id);
+		}
+		seenTricks = total;
+	});
+
+	// shrink cards on small screens
+	let uiScale = $state(1);
+	$effect(() => {
+		const fit = () => (uiScale = Math.max(0.62, Math.min(1, window.innerWidth / 780)));
+		fit();
+		window.addEventListener('resize', fit);
+		return () => window.removeEventListener('resize', fit);
+	});
+	const px = (n: number) => Math.round(n * uiScale);
+
+	// screen-reader turn announcements
+	const announcement = $derived.by(() => {
+		if (!doc || mySeat == null) return '';
+		if ((doc.phase === 'bid1' || doc.phase === 'bid2') && doc.bidding?.turn === mySeat) {
+			return 'Your turn to bid.';
+		}
+		if (doc.phase === 'meld' && doc.trick?.turn === mySeat) {
+			return 'Your turn: announce your meld or play a card.';
+		}
+		if (doc.phase === 'trick' && doc.trick?.turn === mySeat) return 'Your turn to play a card.';
+		if (doc.phase === 'handScored') {
+			const t = teamOf(mySeat);
+			return `Hand over. You ${doc.score.running[t]}, them ${doc.score.running[t ^ 1]}.`;
+		}
+		if (doc.phase === 'gameOver' && doc.winner != null) {
+			return teamOf(mySeat) === doc.winner
+				? 'Game over. Your team wins.'
+				: 'Game over. Your team lost.';
+		}
+		return '';
+	});
 </script>
 
 {#if doc}
@@ -101,28 +148,31 @@
 			{#if host.isHost}running the computer players{/if}
 		</div>
 
+		<div class="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
+
 		<div class="flex flex-1 flex-col items-center justify-center gap-4">
 			<div class="table-grid">
 				{#each SEATS as seat (seat)}
-					<div class="{areaFor(seat)} flex flex-col items-center gap-1.5">
+					<div class="{areaFor(seat)} flex max-w-full min-w-0 flex-col items-center gap-1.5">
 						<PlayerPlate
 							player={doc.players[seat]}
 							relation={relationFor(seat)}
 							isDealer={seat === doc.dealer}
 							isTurn={seat === currentSeat}
 							isThinking={seat === currentSeat && (doc.players[seat]?.isBot ?? false)}
+							justWon={seat === flashSeat}
 							online={doc.players[seat]?.isBot || presence.isOnline(doc.players[seat]?.actorId)}
 							lastBid={lastBid(seat)}
 							tricks={teamTricks(seat)}
 						/>
 						{#if seat !== mySeat}
-							<CardFan count={doc.hands[seat].length} height={46} />
+							<CardFan count={doc.hands[seat].length} height={px(46)} />
 						{/if}
 					</div>
 				{/each}
 
 				<div class="area-center">
-					<TrickArea {doc} {baseSeat} {handPoints} />
+					<TrickArea {doc} {baseSeat} {handPoints} scale={uiScale} />
 				</div>
 			</div>
 
@@ -143,11 +193,13 @@
 
 		<div class="w-full">
 			{#if mySeat != null}
-				<MyHand cards={myHand} legal={myLegal} active={handActive} onplay={play} />
+				<MyHand cards={myHand} legal={myLegal} active={handActive} height={px(118)} onplay={play} />
 			{:else}
 				<p class="pb-4 text-center text-sm text-white/40">You're watching this game.</p>
 			{/if}
 		</div>
+
+		<LogFeed log={doc.log} players={doc.players} />
 	</div>
 
 	<!-- Outside the .lost filter so the fixed overlays position against the
@@ -163,9 +215,9 @@
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		grid-template-rows: auto auto auto;
-		gap: 1.25rem 2.5rem;
+		gap: clamp(0.4rem, 3vw, 1.25rem) clamp(0.5rem, 6vw, 2.5rem);
 		place-items: center;
-		width: min(94vw, 680px);
+		width: min(96vw, 680px);
 	}
 	.area-top {
 		grid-area: 1 / 2;

@@ -29,6 +29,23 @@ describe('HostClaim', () => {
 	});
 });
 
+describe('CoverSeat', () => {
+	it('flips a seated player between human and bot, keeping name and actorId', () => {
+		const doc = createGame('T', 0);
+		reduce(doc, { type: 'JoinSeat', seat: 1, name: 'Ada', actorId: 'ada' });
+		reduce(doc, { type: 'CoverSeat', seat: 1, isBot: true });
+		expect(doc.players[1]).toMatchObject({ name: 'Ada', actorId: 'ada', isBot: true });
+		reduce(doc, { type: 'CoverSeat', seat: 1, isBot: false });
+		expect(doc.players[1]).toMatchObject({ name: 'Ada', actorId: 'ada', isBot: false });
+	});
+
+	it('is a no-op on an empty seat', () => {
+		const doc = createGame('T', 0);
+		reduce(doc, { type: 'CoverSeat', seat: 2, isBot: true });
+		expect(doc.players[2]).toBeNull();
+	});
+});
+
 describe('nextBotAction', () => {
 	it('does nothing in the lobby or once the game is over', () => {
 		expect(nextBotAction(createGame('T', 0))).toBeNull();

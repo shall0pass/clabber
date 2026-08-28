@@ -620,15 +620,40 @@ one compat test):
       desaturated table + card), spectator (confetti + "Team N wins"), and
       Play again returns to the lobby.
 
-### Phase 7 — Polish & deploy
+### Phase 7 — Polish & deploy — ✅ done (deploy = docs + verified locally)
 
-- Reconnect/resume (IndexedDB), stale‑seat cleanup, empty‑seat → bot on
-  disconnect (with a grace period), mobile/responsive table scaling,
-  a11y (keyboard play, ARIA turn announcements), reduced‑motion fallback for
-  fireworks/tears.
-- Build static site; deploy `sync-server/` (Docker) to a small always‑on host;
-  set `PUBLIC_SYNC_URL` for the production build; smoke test 4 real devices.
-- Cleanup: remove unused Drizzle/`better-sqlite3` scaffold if still unused.
+- [x] **Absent-player handling** (host-driven). New `CoverSeat { seat, isBot }`
+      action flips a seated human to/from the bot AI without dropping their
+      name/`actorId`. The `Host` runs a presence reconciler: a seated human
+      offline past `seatGraceMs` (~25 s on top of the 12 s presence window) is
+      `LeaveSeat`'d in the lobby or `CoverSeat`'d mid-game; when they return,
+      control hands straight back. Tests in `host.spec.ts` /
+      `host.svelte.spec.ts`.
+- [x] **Reconnect/resume** — already load-bearing: IndexedDB storage +
+      auto-reconnecting WebSocket adapter + `#code` rejoin. Added an
+      `navigator.onLine` banner ("the game will catch up…").
+- [x] **Responsive table** — `uiScale = clamp(0.62, innerWidth/780, 1)` shrinks
+      the opponent fans, trick cards and your hand; `clamp()` grid gaps;
+      compact plates with hard name truncation on narrow screens. Verified at
+      390 px: no horizontal overflow.
+- [x] **a11y** — `MyHand` cards are buttons (Tab + Enter/Space) and focus jumps
+      to the first legal card when your turn starts; a visually-hidden
+      `aria-live` region announces "Your turn to bid / play…", the hand score
+      and the result. Fireworks/tears already have `prefers-reduced-motion`
+      fallbacks; the trick-win plate pulse honours it too.
+- [x] **Log feed** — collapsible bottom-left panel, last ~14 events with
+      `seat N` → player names.
+- [x] **Trick feedback** — the winning player's plate pulses green for ~0.85 s
+      when they take a trick. (A full card-gather animation would need the
+      engine to keep a resolved trick on screen for a beat; left as a possible
+      future refinement.)
+- [x] **Cleanup** — removed the unused Drizzle / `better-sqlite3` /
+      `adapter-auto` scaffold (its own commit).
+- Deploy: the static build + Cloudflare Pages path is covered in
+  `docs/deploy-cloudflare.md` and verified with `wrangler pages dev` against
+  the live public relay; the Docker path is verified via `docker compose up`.
+  Deploying the self-hosted `sync-server` to a real always-on host and a
+  4-real-device smoke test are left to the operator.
 
 **Containers (available now).** `Dockerfile` (root) builds the SPA with
 `node:22-alpine` and serves `build/` from `nginx:1.27-alpine`

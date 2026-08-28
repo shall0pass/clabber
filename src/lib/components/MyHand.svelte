@@ -26,12 +26,26 @@
 	function playable(c: CardT) {
 		return active && legalSet.has(c);
 	}
+
+	// When it becomes this player's turn, move keyboard focus to the first
+	// playable card so it can be played without reaching for the mouse.
+	let container = $state<HTMLDivElement>();
+	let wasActive = false;
+	$effect(() => {
+		if (active && !wasActive) {
+			container?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
+		}
+		wasActive = active;
+	});
 </script>
 
 <div
+	bind:this={container}
 	class="relative mx-auto"
 	style:height="{height + 18}px"
 	style:width="{cards.length ? step * (cards.length - 1) + width : 0}px"
+	role="group"
+	aria-label="your hand"
 >
 	{#each cards as card, i (card)}
 		<button

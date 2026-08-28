@@ -7,6 +7,7 @@
 		isDealer = false,
 		isTurn = false,
 		isThinking = false,
+		justWon = false,
 		online = true,
 		lastBid = '',
 		tricks = 0
@@ -16,6 +17,8 @@
 		isDealer?: boolean;
 		isTurn?: boolean;
 		isThinking?: boolean;
+		/** briefly true right after this player takes a trick */
+		justWon?: boolean;
 		online?: boolean;
 		/** "pass" / "♠" / "" — shown during bidding. */
 		lastBid?: string;
@@ -29,9 +32,10 @@
 </script>
 
 <div
-	class="flex items-center gap-2 rounded-full bg-green-950/80 px-3 py-1.5 text-sm ring-2 {ringColor} {isTurn
+	class="flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-green-950/80 px-2 py-1.5 text-sm ring-2 sm:gap-2 sm:px-3 {ringColor} {isTurn
 		? 'shadow-[0_0_16px_rgba(252,211,77,0.5)]'
 		: ''}"
+	class:won={justWon}
 >
 	<span class="inline-block h-2 w-2 shrink-0 rounded-full {online ? 'bg-green-400' : 'bg-white/25'}"
 	></span>
@@ -44,7 +48,7 @@
 		</svg>
 	{/if}
 
-	<span class="max-w-[8rem] truncate font-semibold">{player?.name ?? 'empty'}</span>
+	<span class="max-w-24 truncate font-semibold sm:max-w-32">{player?.name ?? 'empty'}</span>
 
 	{#if isDealer}
 		<span
@@ -65,3 +69,22 @@
 		>
 	{/if}
 </div>
+
+<style>
+	.won {
+		animation: wonpulse 0.8s ease-out;
+	}
+	@keyframes wonpulse {
+		0% {
+			box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+		}
+		100% {
+			box-shadow: 0 0 0 14px rgba(74, 222, 128, 0);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.won {
+			animation: none;
+		}
+	}
+</style>

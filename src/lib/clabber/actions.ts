@@ -16,6 +16,9 @@ export type Action =
 	/** Claim the "bot runner" role. Which client should claim (and when) is
 	 *  decided client-side; the reducer just records the winner. */
 	| { type: 'HostClaim'; actorId: string }
+	/** Hand a seated human's seat to (or back from) the bot AI mid-game when
+	 *  they drop out. Keeps the name and `actorId` so they resume on return. */
+	| { type: 'CoverSeat'; seat: Seat; isBot: boolean }
 	/** After a game ends: back to the lobby, keeping seats, names and the code. */
 	| { type: 'ResetToLobby' };
 

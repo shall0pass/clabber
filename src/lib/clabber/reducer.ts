@@ -45,6 +45,11 @@ export function reduce(doc: GameDoc, action: Action): void {
 		case 'HostClaim':
 			doc.hostActorId = action.actorId;
 			return;
+		case 'CoverSeat': {
+			const p = doc.players[action.seat];
+			if (p) p.isBot = action.isBot;
+			return;
+		}
 		case 'ResetToLobby':
 			return resetToLobby(doc);
 	}

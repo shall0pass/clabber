@@ -20,7 +20,8 @@ function setup(clientId: string) {
 		maxDelayMs: 0,
 		interHandDelayMs: 0,
 		redealDelayMs: 0,
-		electionIntervalMs: 200
+		electionIntervalMs: 200,
+		seatGraceMs: 150
 	});
 	return { store, presence, host };
 }
@@ -85,5 +86,41 @@ describe('Host', () => {
 
 		expect(store.doc?.phase).toBe('gameOver');
 		expect([0, 1]).toContain(store.doc?.winner);
+	});
+
+	it('covers an absent human mid-hand with a bot, and hands it back when they return', async () => {
+		const { store, presence, host } = setup('host');
+		store.change({ type: 'JoinSeat', seat: 0, name: 'Ada', actorId: 'ada' });
+		for (const s of [1, 2, 3] as const) store.change({ type: 'SetBot', seat: s, isBot: true });
+		store.change({ type: 'StartHand', seed: 'cover-me' });
+
+		presence.seen['ada'] = Date.now(); // Ada is online at the deal
+		host.start();
+		await wait(60);
+		expect(store.doc?.players[0]?.isBot).toBe(false);
+
+		// Ada goes away: no more heartbeats.
+		presence.seen['ada'] = Date.now() - 60_000;
+		await wait(500);
+		expect(store.doc?.players[0]).toMatchObject({ name: 'Ada', actorId: 'ada', isBot: true });
+
+		// Ada comes back.
+		presence.seen['ada'] = Date.now();
+		await wait(500);
+		expect(store.doc?.players[0]).toMatchObject({ actorId: 'ada', isBot: false });
+
+		host.stop();
+	});
+
+	it('clears an absent human’s lobby seat', async () => {
+		const { store, presence, host } = setup('host');
+		store.change({ type: 'JoinSeat', seat: 2, name: 'Bo', actorId: 'bo' });
+		presence.seen['bo'] = Date.now() - 60_000; // never seen
+		host.start();
+
+		const deadline = Date.now() + 3000;
+		while (store.doc?.players[2] != null && Date.now() < deadline) await wait(50);
+		expect(store.doc?.players[2]).toBeNull();
+		host.stop();
 	});
 });

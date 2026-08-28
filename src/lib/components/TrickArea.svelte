@@ -6,13 +6,16 @@
 	let {
 		doc,
 		baseSeat = 0,
-		handPoints = [0, 0]
+		handPoints = [0, 0],
+		scale = 1
 	}: {
 		doc: GameDoc;
 		/** the seat rendered at the bottom of the table */
 		baseSeat?: Seat;
 		/** trick points banked so far this hand, [team0, team1] */
 		handPoints?: [number, number];
+		/** shrink factor for small screens */
+		scale?: number;
 	} = $props();
 
 	// screen slot for a seat: 0 bottom, 1 left, 2 top, 3 right
@@ -31,8 +34,9 @@
 </script>
 
 <div
-	class="relative grid aspect-square w-full max-w-[190px] place-items-center rounded-full text-center"
-	style="background: radial-gradient(circle at 50% 40%, #157a4a, #0a5c36 72%); box-shadow: inset 0 0 40px rgba(0,0,0,0.35);"
+	class="relative grid aspect-square w-full place-items-center rounded-full text-center"
+	style="max-width: {190 *
+		scale}px; background: radial-gradient(circle at 50% 40%, #157a4a, #0a5c36 72%); box-shadow: inset 0 0 40px rgba(0,0,0,0.35);"
 >
 	<div class="text-white/85">
 		{#if trump}
@@ -49,7 +53,7 @@
 
 	{#each plays as play (play.seat)}
 		<div class="absolute {SLOT_POS[slot(play.seat)]}">
-			<Card card={play.card} height={58} />
+			<Card card={play.card} height={Math.round(58 * scale)} />
 		</div>
 	{/each}
 </div>

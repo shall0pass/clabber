@@ -13,6 +13,7 @@
 	let host = $state<Host | undefined>(undefined);
 	let booting = $state(true);
 	let bootError = $state('');
+	let online = $state(true);
 
 	function attach(s: GameStore) {
 		store = s;
@@ -42,6 +43,12 @@
 	}
 
 	onMount(() => {
+		online = navigator.onLine;
+		const setOn = () => (online = true);
+		const setOff = () => (online = false);
+		window.addEventListener('online', setOn);
+		window.addEventListener('offline', setOff);
+
 		const code = location.hash.replace(/^#+/, '');
 		if (code) {
 			joinExistingGame(code)
@@ -56,6 +63,8 @@
 		}
 
 		return () => {
+			window.removeEventListener('online', setOn);
+			window.removeEventListener('offline', setOff);
 			host?.stop();
 			presence?.stop();
 		};
@@ -63,6 +72,15 @@
 
 	const phase = $derived(store?.doc?.phase);
 </script>
+
+{#if !online}
+	<div
+		class="fixed inset-x-0 top-0 z-50 bg-amber-500 py-1 text-center text-xs font-semibold text-amber-950"
+		role="status"
+	>
+		Offline — the game will catch up when you're back on the network.
+	</div>
+{/if}
 
 {#if booting}
 	<div class="grid min-h-screen place-items-center bg-green-900 text-white/70">joining…</div>

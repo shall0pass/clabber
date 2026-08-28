@@ -1,5 +1,6 @@
 // The bot runner. Exactly one connected client ("the host") drives every bot
-// seat through bidding, meld and trick play, and starts each new hand.
+// seat through bidding, meld and trick play, starts each new hand, and covers
+// for humans who drop out.
 //
 // Election: the online client with the smallest id claims the host role by
 // writing `hostActorId` into the doc (see `pickHost`). A live host is left
@@ -14,6 +15,8 @@
 import type { GameStore } from './gameStore.svelte';
 import type { Presence } from './presence.svelte';
 import { HOST_STALE_MS, nextBotAction, pickHost } from '$lib/clabber/host';
+import { SEATS } from '$lib/clabber/state';
+import type { Seat } from '$lib/clabber/types';
 
 export interface HostOptions {
 	/** Humanising think-time bounds for a bot move (ms). */
@@ -23,8 +26,11 @@ export interface HostOptions {
 	interHandDelayMs?: number;
 	/** Pause before re-dealing after everyone passed twice (ms). */
 	redealDelayMs?: number;
-	/** How often to re-check the election (ms). */
+	/** How often to re-check the election + absent players (ms). */
 	electionIntervalMs?: number;
+	/** How long a seated human may be offline before the host covers / clears
+	 *  their seat (ms, on top of the ~12 s presence window). */
+	seatGraceMs?: number;
 	makeSeed?: () => string;
 }
 
@@ -35,6 +41,7 @@ const DEFAULTS: Required<HostOptions> = {
 	interHandDelayMs: 5000,
 	redealDelayMs: 700,
 	electionIntervalMs: 2500,
+	seatGraceMs: 25000,
 	makeSeed: () => crypto.randomUUID()
 };
 
@@ -44,8 +51,9 @@ export class Host {
 	#clientId: string;
 	#opts: Required<HostOptions>;
 	#moveTimer: ReturnType<typeof setTimeout> | undefined;
-	#electionTimer: ReturnType<typeof setInterval> | undefined;
+	#tickTimer: ReturnType<typeof setInterval> | undefined;
 	#running = false;
+	#absentSince = new Map<Seat, number>();
 	#onChange = () => this.#reconcile();
 
 	constructor(store: GameStore, presence: Presence, opts: HostOptions = {}) {
@@ -65,17 +73,24 @@ export class Host {
 		if (this.#running) return;
 		this.#running = true;
 		this.#store.handle.on('change', this.#onChange);
-		this.#electionTimer = setInterval(() => this.#elect(), this.#opts.electionIntervalMs);
-		this.#elect();
+		this.#tickTimer = setInterval(() => this.#tick(), this.#opts.electionIntervalMs);
+		this.#tick();
 		this.#reconcile();
 	}
 
 	stop(): void {
 		this.#running = false;
 		this.#store.handle.off('change', this.#onChange);
-		clearInterval(this.#electionTimer);
+		clearInterval(this.#tickTimer);
 		clearTimeout(this.#moveTimer);
-		this.#electionTimer = this.#moveTimer = undefined;
+		this.#tickTimer = this.#moveTimer = undefined;
+		this.#absentSince.clear();
+	}
+
+	#tick(): void {
+		if (!this.#running) return;
+		this.#elect();
+		this.#coverAbsentPlayers();
 	}
 
 	#onlineClientIds(): string[] {
@@ -88,7 +103,6 @@ export class Host {
 	}
 
 	#elect(): void {
-		if (!this.#running) return;
 		const doc = this.#store.doc;
 		if (!doc) return;
 		const online = this.#onlineClientIds();
@@ -103,10 +117,51 @@ export class Host {
 		}
 	}
 
+	/** Once host, clear (in the lobby) or bot-cover (in a hand) a seat whose
+	 *  human has been gone past the grace period; hand it straight back when
+	 *  they return. */
+	#coverAbsentPlayers(): void {
+		if (!this.isHost) return;
+		const doc = this.#store.doc;
+		if (!doc) return;
+		const now = Date.now();
+		const online = new Set(this.#onlineClientIds());
+
+		for (const seat of SEATS) {
+			const p = doc.players[seat];
+			if (!p || !p.actorId) {
+				this.#absentSince.delete(seat);
+				continue;
+			}
+			if (online.has(p.actorId)) {
+				this.#absentSince.delete(seat);
+				if (p.isBot && doc.phase !== 'lobby') {
+					this.#safe({ type: 'CoverSeat', seat, isBot: false }); // welcome back
+				}
+				continue;
+			}
+			// human gone
+			const since = this.#absentSince.get(seat) ?? (this.#absentSince.set(seat, now), now);
+			if (now - since < this.#opts.seatGraceMs) continue;
+			this.#absentSince.delete(seat);
+			if (doc.phase === 'lobby') this.#safe({ type: 'LeaveSeat', seat });
+			else if (!p.isBot) this.#safe({ type: 'CoverSeat', seat, isBot: true });
+		}
+	}
+
+	#safe(action: Parameters<GameStore['change']>[0]): void {
+		try {
+			this.#store.change(action);
+		} catch {
+			/* raced by another client */
+		}
+	}
+
 	#reconcile(): void {
 		if (!this.#running) return;
 		clearTimeout(this.#moveTimer);
 		this.#moveTimer = undefined;
+		this.#coverAbsentPlayers();
 		if (!this.isHost) return;
 
 		const doc = this.#store.doc;
