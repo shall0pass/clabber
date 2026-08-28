@@ -4,6 +4,7 @@ import {
 	beats,
 	cardPoints,
 	nonTrumpStrength,
+	sortHand,
 	trickWinner,
 	trumpStrength
 } from './cards';
@@ -89,5 +90,24 @@ describe('beats / trickWinner', () => {
 
 	it('a trump played on a non-trump lead takes the trick', () => {
 		expect(w(['AH', 'KH', 'QS', '9H'], 'S')).toBe(2); // QS
+	});
+});
+
+describe('sortHand', () => {
+	it('puts trump first (strongest first), then the other suits strongest first', () => {
+		const hand: Card[] = ['9H', 'AH', 'KS', 'JS', '9S', 'AC'];
+		// trump = spades: J,9,K (trump order J>9>K); then hearts A>9; then clubs A
+		expect(sortHand(hand, 'S')).toEqual(['JS', '9S', 'KS', 'AH', '9H', 'AC']);
+	});
+
+	it('with no trump, groups by suit and orders A 10 K Q J 9', () => {
+		const hand: Card[] = ['9S', 'AS', 'KH', 'AH', 'TH'];
+		expect(sortHand(hand, null)).toEqual(['AS', '9S', 'AH', 'TH', 'KH']);
+	});
+
+	it('does not mutate the input', () => {
+		const hand: Card[] = ['9S', 'AS'];
+		sortHand(hand, 'S');
+		expect(hand).toEqual(['9S', 'AS']);
 	});
 });

@@ -551,13 +551,41 @@ one compat test):
   until the Phase 5 table UI gives that human a way to play; the pure and
   chromium tests cover the bot-only path.
 
-### Phase 5 — Table & play UI
+### Phase 5 — Table & play UI — ✅ done
 
-- `Table.svelte` seat rotation (me at bottom), `Seat.svelte`, opponent fans,
-  dealer chip, turn/thinking indicators.
-- `BiddingPanel`, `MeldPanel`, in‑hand `legalMoves` gating (one card at a time),
-  trick animation, trump badge, log feed.
-- `Scoreboard` running + per‑hand modal; host auto‑advance.
+- [x] `Table.svelte` — the in-game view (replaces the placeholder). Seats
+      rotated so you sit at the bottom; `PlayerPlate.svelte` per seat (name,
+      bot icon, online dot, dealer chip **D**, amber turn glow, "thinking…"
+      for a bot on turn, pass marker, team trick count); `CardFan.svelte`
+      face-down fans for the other three hands.
+- [x] `TrickArea.svelte` — felt circle at centre: trump symbol, trick N/6,
+      live trick points, and the played cards laid toward each player's seat.
+- [x] `MyHand.svelte` — your hand, `sortHand`ed (trump first, then by rank).
+      Cards are `<button>`s; only `legalMoves` cards are enabled and lift on
+      hover, and only while `phase ∈ {meld, trick} && trick.turn === mySeat`
+      (one card at a time). Illegal cards dim.
+- [x] `BiddingPanel.svelte` — up-card + round text; on your turn, one button
+      per `legalBids` entry; otherwise "waiting for …".
+- [x] `MeldPanel.svelte` — during the first trick, before you've played:
+      lists `detectMelds` with points and an "Announce N" button; a transient
+      "Team X scored N for meld" banner after the trick resolves.
+- [x] `Scoreboard.svelte` — compact "You / Them" toward 500, always visible;
+      a modal on `handScored` with the trick/meld/awarded/game breakdown and a
+      "Next hand" button (the host also auto-advances — `interHandDelayMs`
+      raised to 5 s so the breakdown is readable).
+- [x] `GameOver.svelte` — 🎆 / 😢 placeholder (Phase 6 makes it real),
+      final score, "Play again" → new `ResetToLobby` action (gameOver → lobby,
+      keeps seats/names/code).
+- [x] Helpers: `sortHand(cards, trump)` and `trickPointsSoFar(doc)` (pure,
+      tested); `GameStore.tryChange` swallows a `RuleError` for UI-initiated
+      moves that a bot raced. `?fast` (dev) shrinks bot delays.
+- [x] Tests (103 total): `sortHand`, `trickPointsSoFar`, `ResetToLobby`,
+      `MyHand.svelte` (legal gating + click), plus a full-game Playwright E2E —
+      one Playwright-driven human + three host-driven bots play a complete
+      game to 500 through the real UI (bidding → meld → trick play → hand
+      scoring → next hand → game over).
+- Deferred to Phase 7: tighter card fanning / responsive sizing, a visible
+  log feed, trick animation.
 
 ### Phase 6 — Win / lose
 

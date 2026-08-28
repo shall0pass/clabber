@@ -45,7 +45,34 @@ export function reduce(doc: GameDoc, action: Action): void {
 		case 'HostClaim':
 			doc.hostActorId = action.actorId;
 			return;
+		case 'ResetToLobby':
+			return resetToLobby(doc);
 	}
+}
+
+function resetToLobby(doc: GameDoc): void {
+	if (doc.phase !== 'gameOver')
+		fail(`can only reset to the lobby after a game (phase ${doc.phase})`);
+	doc.phase = 'lobby';
+	doc.dealer = 0;
+	doc.seed = '';
+	doc.hands = [[], [], [], []];
+	doc.upCard = null;
+	doc.trump = null;
+	doc.maker = null;
+	doc.bidding = null;
+	doc.trick = null;
+	doc.wonBySeat = [[], [], [], []];
+	doc.lastTrickWinner = null;
+	doc.melds = {
+		declared: [null, null, null, null],
+		resolved: false,
+		scoredTeam: null,
+		points: [0, 0]
+	};
+	doc.score = { running: [0, 0], hands: [] };
+	doc.winner = null;
+	doc.log.push('back to the lobby for another game');
 }
 
 // --- lobby -----------------------------------------------------------------

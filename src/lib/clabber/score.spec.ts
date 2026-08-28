@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkGameEnd, scoreHand } from './score';
+import { checkGameEnd, scoreHand, trickPointsSoFar } from './score';
 import { cardPoints } from './cards';
 import { createGame } from './state';
 import type { Card, GameDoc, TeamId } from './types';
@@ -69,5 +69,23 @@ describe('checkGameEnd', () => {
 	it('plays another hand on an exact tie at or above 500', () => {
 		expect(checkGameEnd([500, 500])).toBeNull();
 		expect(checkGameEnd([520, 520])).toBeNull();
+	});
+});
+
+describe('trickPointsSoFar', () => {
+	it('sums card points per team, with no last-trick bonus', () => {
+		const doc = createGame('T', 0);
+		doc.trump = 'S';
+		doc.wonBySeat = [
+			[['AS', 'KH']], // seat 0 (team 0): 11 + 4
+			[['9H', 'QC']], // seat 1 (team 1): 0 + 3
+			[],
+			[]
+		];
+		expect(trickPointsSoFar(doc)).toEqual([15, 3]);
+	});
+
+	it('is [0, 0] before any trick is taken', () => {
+		expect(trickPointsSoFar(createGame('T', 0))).toEqual([0, 0]);
 	});
 });

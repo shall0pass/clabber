@@ -31,7 +31,8 @@ export interface HostOptions {
 const DEFAULTS: Required<HostOptions> = {
 	minDelayMs: 450,
 	maxDelayMs: 1150,
-	interHandDelayMs: 2500,
+	// Long enough to read the hand's score breakdown before the next deal.
+	interHandDelayMs: 5000,
 	redealDelayMs: 700,
 	electionIntervalMs: 2500,
 	makeSeed: () => crypto.randomUUID()

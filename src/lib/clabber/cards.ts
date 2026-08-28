@@ -48,6 +48,19 @@ export function beats(a: Card, b: Card, trump: Suit | null, led: Suit): boolean 
 	return al && !bl;
 }
 
+/** Order a hand for display: trump grouped first (strongest first), then the
+ *  other suits, each ordered strongest to weakest. */
+export function sortHand(cards: readonly Card[], trump: Suit | null): Card[] {
+	const suitRank = (s: Suit) => (s === trump ? -1 : SUITS.indexOf(s));
+	return [...cards].sort((a, b) => {
+		const sa = suitOf(a);
+		const sb = suitOf(b);
+		if (sa !== sb) return suitRank(sa) - suitRank(sb);
+		const strength = sa === trump ? trumpStrength : nonTrumpStrength;
+		return strength(b) - strength(a);
+	});
+}
+
 /** The seat that wins a completed (or partial) trick. `plays[0]` is the lead. */
 export function trickWinner(plays: TrickPlay[], trump: Suit | null): Seat {
 	const led = suitOf(plays[0].card);

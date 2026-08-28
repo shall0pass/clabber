@@ -3,6 +3,7 @@
 	import { dev } from '$app/environment';
 	import JoinScreen from '$lib/components/JoinScreen.svelte';
 	import Lobby from '$lib/components/Lobby.svelte';
+	import Table from '$lib/components/Table.svelte';
 	import { GameStore, joinExistingGame } from '$lib/repo/gameStore.svelte';
 	import { Presence } from '$lib/repo/presence.svelte';
 	import { Host } from '$lib/repo/host';
@@ -24,7 +25,14 @@
 		p.start();
 		presence = p;
 
-		const h = new Host(s, p);
+		// `?fast` (dev only) shrinks the bots' think-time — handy for manual
+		// testing and end-to-end runs.
+		const fast = dev && location.search.includes('fast');
+		const h = new Host(
+			s,
+			p,
+			fast ? { minDelayMs: 15, maxDelayMs: 40, interHandDelayMs: 60, redealDelayMs: 20 } : {}
+		);
 		h.start();
 		host = h;
 
@@ -58,21 +66,11 @@
 
 {#if booting}
 	<div class="grid min-h-screen place-items-center bg-green-900 text-white/70">joining…</div>
-{:else if store && presence}
+{:else if store && presence && host}
 	{#if phase === 'lobby'}
 		<Lobby {store} {presence} />
 	{:else}
-		<div class="grid min-h-screen place-items-center bg-green-900 p-6 text-center text-white">
-			<div>
-				<p class="text-lg font-semibold">Game in progress</p>
-				<p class="text-sm text-white/60">
-					Phase: {phase}. The table view arrives in a later step.
-				</p>
-				{#if host?.isHost}
-					<p class="mt-2 text-xs text-white/40">You're running the computer players.</p>
-				{/if}
-			</div>
-		</div>
+		<Table {store} {presence} {host} />
 	{/if}
 {:else}
 	<JoinScreen onjoined={attach} />

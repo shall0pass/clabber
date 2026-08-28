@@ -95,3 +95,23 @@ describe('a complete hand', () => {
 		expect(doc.wonBySeat.flat()).toHaveLength(6); // six tricks collected
 	});
 });
+
+describe('ResetToLobby', () => {
+	it('clears the game but keeps the seats, and only from gameOver', () => {
+		const doc = fourBots();
+		reduce(doc, { type: 'JoinSeat', seat: 0, name: 'Ada', actorId: 'a' });
+		reduce(doc, { type: 'StartHand', seed: 'r' });
+		expect(() => reduce(doc, { type: 'ResetToLobby' })).toThrow(RuleError);
+
+		doc.phase = 'gameOver';
+		doc.score.running = [510, 300];
+		reduce(doc, { type: 'ResetToLobby' });
+
+		expect(doc.phase).toBe('lobby');
+		expect(doc.score.running).toEqual([0, 0]);
+		expect(doc.winner).toBeNull();
+		expect(doc.trick).toBeNull();
+		expect(doc.players[0]).toMatchObject({ name: 'Ada' });
+		expect(doc.players[1]?.isBot).toBe(true);
+	});
+});

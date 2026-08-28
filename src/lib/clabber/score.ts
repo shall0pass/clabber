@@ -51,6 +51,18 @@ export function scoreHand(doc: GameDoc): HandResult {
 	};
 }
 
+/** Trick points each team has banked so far this hand (no last-trick bonus,
+ *  no meld) — for the live scoreboard during play. */
+export function trickPointsSoFar(doc: GameDoc): [number, number] {
+	const pts: [number, number] = [0, 0];
+	for (const seat of SEATS) {
+		for (const won of doc.wonBySeat[seat]) {
+			for (const card of won) pts[teamOf(seat)] += cardPoints(card, doc.trump);
+		}
+	}
+	return pts;
+}
+
 /** The winning team once a hand's scores are in `running`, or `null` if the
  *  game continues. */
 export function checkGameEnd(running: readonly [number, number]): TeamId | null {

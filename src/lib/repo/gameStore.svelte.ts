@@ -63,6 +63,17 @@ export class GameStore {
 	change(action: Action): void {
 		this.#handle.change((d) => reduce(d as unknown as GameDoc, action));
 	}
+
+	/** Apply an action, swallowing a `RuleError` (e.g. a bot raced us to the
+	 *  move). Returns whether it applied. For UI-initiated actions. */
+	tryChange(action: Action): boolean {
+		try {
+			this.change(action);
+			return true;
+		} catch {
+			return false;
+		}
+	}
 }
 
 // --- create / join -------------------------------------------------------

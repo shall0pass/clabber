@@ -15,6 +15,8 @@ export type Action =
 	| { type: 'PlayCard'; seat: Seat; card: Card }
 	/** Claim the "bot runner" role. Which client should claim (and when) is
 	 *  decided client-side; the reducer just records the winner. */
-	| { type: 'HostClaim'; actorId: string };
+	| { type: 'HostClaim'; actorId: string }
+	/** After a game ends: back to the lobby, keeping seats, names and the code. */
+	| { type: 'ResetToLobby' };
 
 export type ActionType = Action['type'];
