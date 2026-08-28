@@ -42,16 +42,35 @@ There is no server of ours to run. The self-hosted `sync-server/` and
 
 ## 3. Environment variables
 
-Set these for **Production** (and Preview) in
-_Pages → your project → Settings → Variables and Secrets_. They are read at
-**build time**.
+`PUBLIC_SYNC_URL` — the WebSocket relay the browser connects to — is baked into
+the bundle at build time.
 
-| Name              | Value                      | Why                                         |
-| ----------------- | -------------------------- | ------------------------------------------- |
-| `PUBLIC_SYNC_URL` | `wss://sync.automerge.org` | the WebSocket relay the browser connects to |
+**The repo already ships a default:** `.env.production` sets
+`PUBLIC_SYNC_URL=wss://sync.automerge.org`, so a fresh Pages project builds and
+runs with **no configuration at all**. Only override it if you run your own
+relay.
 
-That is the only required variable. `DATABASE_URL` from `.env.example` is only
-for the unused Drizzle scaffold — you can ignore it.
+To override, add it in _Pages → your project → Settings → Variables and
+Secrets_:
+
+| Name              | Value               | Notes                                                                                               |
+| ----------------- | ------------------- | --------------------------------------------------------------------------------------------------- |
+| `PUBLIC_SYNC_URL` | `wss://your-relay…` | must be a **plaintext Variable**, and set for the environment you deploy (Production _and_ Preview) |
+
+> **"Missing PUBLIC_SYNC_URL export" on the build?** That means the build can't
+> see the variable. Two usual causes:
+>
+> 1. It was added as a **Secret** (the lock icon). Cloudflare does **not**
+>    expose Secrets to the build step — only plaintext Variables. Delete it and
+>    re-add it as a plaintext Variable.
+> 2. It's set for **Production** but the failing build is a **Preview** (a
+>    branch or pull request), or vice versa. Add it to both.
+>
+> With `.env.production` in place the build no longer fails either way; it just
+> falls back to the public relay if the dashboard value doesn't reach it.
+
+`DATABASE_URL` from `.env.example` is only for the unused Drizzle scaffold —
+ignore it.
 
 ## 4. Short join codes (optional but recommended)
 
