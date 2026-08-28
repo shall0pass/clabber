@@ -32,7 +32,15 @@
 		const h = new Host(
 			s,
 			p,
-			fast ? { minDelayMs: 15, maxDelayMs: 40, interHandDelayMs: 60, redealDelayMs: 20 } : {}
+			fast
+				? {
+						minDelayMs: 15,
+						maxDelayMs: 40,
+						trickDelayMs: 40,
+						interHandDelayMs: 60,
+						redealDelayMs: 20
+					}
+				: {}
 		);
 		h.start();
 		host = h;

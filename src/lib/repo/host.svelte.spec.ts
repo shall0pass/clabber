@@ -18,6 +18,7 @@ function setup(clientId: string) {
 	const host = new Host(store, presence, {
 		minDelayMs: 0,
 		maxDelayMs: 0,
+		trickDelayMs: 0,
 		interHandDelayMs: 0,
 		redealDelayMs: 0,
 		electionIntervalMs: 200,

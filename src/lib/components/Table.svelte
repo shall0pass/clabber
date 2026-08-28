@@ -89,19 +89,12 @@
 		}
 	});
 
-	// pulse the plate of whoever just took a trick
-	let flashSeat = $state<Seat | null>(null);
-	let seenTricks = 0;
-	$effect(() => {
-		const total = doc ? doc.wonBySeat.reduce((n, w) => n + w.length, 0) : 0;
-		if (total > seenTricks && doc?.lastTrickWinner != null) {
-			flashSeat = doc.lastTrickWinner;
-			const id = setTimeout(() => (flashSeat = null), 850);
-			seenTricks = total;
-			return () => clearTimeout(id);
-		}
-		seenTricks = total;
-	});
+	// while a completed trick is held on screen, pulse the winner's plate
+	const flashSeat = $derived(doc?.phase === 'trickDone' ? (doc.trick?.winner ?? null) : null);
+
+	function advanceTrick() {
+		store.tryChange({ type: 'AdvanceTrick' });
+	}
 
 	// shrink cards on small screens
 	let uiScale = $state(1);
@@ -123,6 +116,10 @@
 			return 'Your turn: announce your meld or play a card.';
 		}
 		if (doc.phase === 'trick' && doc.trick?.turn === mySeat) return 'Your turn to play a card.';
+		if (doc.phase === 'trickDone' && doc.trick?.winner != null) {
+			const w = doc.trick.winner;
+			return `Trick to ${w === mySeat ? 'you' : (doc.players[w]?.name ?? `seat ${w}`)}.`;
+		}
 		if (doc.phase === 'handScored') {
 			const t = teamOf(mySeat);
 			return `Hand over. You ${doc.score.running[t]}, them ${doc.score.running[t ^ 1]}.`;
@@ -172,7 +169,13 @@
 				{/each}
 
 				<div class="area-center">
-					<TrickArea {doc} {baseSeat} {handPoints} scale={uiScale} />
+					<TrickArea
+						{doc}
+						{baseSeat}
+						{handPoints}
+						scale={uiScale}
+						winner={doc.phase === 'trickDone' ? doc.trick?.winner : null}
+					/>
 				</div>
 			</div>
 
@@ -186,6 +189,13 @@
 				<BiddingPanel {store} />
 			{:else if doc.phase === 'meld'}
 				<MeldPanel {store} />
+			{:else if doc.phase === 'trickDone'}
+				<button
+					onclick={advanceTrick}
+					class="rounded-lg bg-white/10 px-4 py-1.5 text-sm text-white/70 hover:bg-white/20"
+				>
+					Continue →
+				</button>
 			{:else if doc.phase === 'redeal'}
 				<div class="text-sm text-white/60">Everyone passed — re-dealing…</div>
 			{/if}

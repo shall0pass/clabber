@@ -21,6 +21,7 @@ export type Phase =
 	| 'redeal' // everyone passed twice; the same dealer deals again
 	| 'meld' // first trick in progress; meld announcements still open
 	| 'trick' // tricks 2..6
+	| 'trickDone' // all four cards played; held on screen before it is collected
 	| 'handScored' // hand finished, showing the breakdown
 	| 'gameOver';
 
@@ -57,6 +58,8 @@ export interface TrickState {
 	leader: Seat;
 	turn: Seat;
 	plays: TrickPlay[];
+	/** Set once the fourth card is played (phase `trickDone`); null while in play. */
+	winner: Seat | null;
 }
 
 export interface MeldClaim {

@@ -47,6 +47,10 @@ function step(doc: GameDoc, nextSeed: () => string): void {
 			reduce(doc, { type: 'PlayCard', seat, card });
 			return;
 		}
+		case 'trickDone': {
+			reduce(doc, { type: 'AdvanceTrick' });
+			return;
+		}
 		case 'redeal':
 		case 'handScored': {
 			reduce(doc, { type: 'StartHand', seed: nextSeed() });

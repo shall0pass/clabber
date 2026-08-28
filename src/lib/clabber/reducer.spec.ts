@@ -15,7 +15,11 @@ function playOneHand(doc: GameDoc): void {
 		const seat = doc.bidding!.turn;
 		reduce(doc, { type: 'Bid', seat, bid: chooseBid(doc, seat) });
 	}
-	while (doc.phase === 'meld' || doc.phase === 'trick') {
+	while (doc.phase === 'meld' || doc.phase === 'trick' || doc.phase === 'trickDone') {
+		if (doc.phase === 'trickDone') {
+			reduce(doc, { type: 'AdvanceTrick' });
+			continue;
+		}
 		const seat = doc.trick!.turn;
 		if (doc.phase === 'meld' && doc.melds.declared[seat] == null) {
 			reduce(doc, { type: 'AnnounceMeld', seat });

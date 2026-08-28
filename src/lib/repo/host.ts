@@ -22,6 +22,8 @@ export interface HostOptions {
 	/** Humanising think-time bounds for a bot move (ms). */
 	minDelayMs?: number;
 	maxDelayMs?: number;
+	/** How long to hold a completed trick on screen before collecting it (ms). */
+	trickDelayMs?: number;
 	/** Pause on the score screen before dealing the next hand (ms). */
 	interHandDelayMs?: number;
 	/** Pause before re-dealing after everyone passed twice (ms). */
@@ -37,6 +39,8 @@ export interface HostOptions {
 const DEFAULTS: Required<HostOptions> = {
 	minDelayMs: 450,
 	maxDelayMs: 1150,
+	// Long enough that everyone sees all four cards of a trick.
+	trickDelayMs: 1400,
 	// Long enough to read the hand's score breakdown before the next deal.
 	interHandDelayMs: 5000,
 	redealDelayMs: 700,
@@ -167,13 +171,15 @@ export class Host {
 		const doc = this.#store.doc;
 		if (!doc || !nextBotAction(doc, this.#opts.makeSeed)) return;
 
-		const { minDelayMs, maxDelayMs, interHandDelayMs, redealDelayMs } = this.#opts;
+		const { minDelayMs, maxDelayMs, trickDelayMs, interHandDelayMs, redealDelayMs } = this.#opts;
 		const delay =
-			doc.phase === 'handScored'
-				? interHandDelayMs
-				: doc.phase === 'redeal'
-					? redealDelayMs
-					: minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
+			doc.phase === 'trickDone'
+				? trickDelayMs
+				: doc.phase === 'handScored'
+					? interHandDelayMs
+					: doc.phase === 'redeal'
+						? redealDelayMs
+						: minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
 
 		this.#moveTimer = setTimeout(() => {
 			this.#moveTimer = undefined;

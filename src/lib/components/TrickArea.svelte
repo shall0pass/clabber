@@ -7,7 +7,8 @@
 		doc,
 		baseSeat = 0,
 		handPoints = [0, 0],
-		scale = 1
+		scale = 1,
+		winner = null
 	}: {
 		doc: GameDoc;
 		/** the seat rendered at the bottom of the table */
@@ -16,6 +17,8 @@
 		handPoints?: [number, number];
 		/** shrink factor for small screens */
 		scale?: number;
+		/** while a finished trick is held on screen, the seat that took it */
+		winner?: Seat | null;
 	} = $props();
 
 	// screen slot for a seat: 0 bottom, 1 left, 2 top, 3 right
@@ -52,8 +55,19 @@
 	</div>
 
 	{#each plays as play (play.seat)}
-		<div class="absolute {SLOT_POS[slot(play.seat)]}">
+		<div
+			class="absolute transition-transform duration-200 {SLOT_POS[slot(play.seat)]}"
+			class:trick-winner={winner === play.seat}
+		>
 			<Card card={play.card} height={Math.round(58 * scale)} />
 		</div>
 	{/each}
 </div>
+
+<style>
+	.trick-winner {
+		scale: 1.12;
+		filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.9));
+		z-index: 1;
+	}
+</style>

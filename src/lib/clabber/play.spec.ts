@@ -21,7 +21,8 @@ function trickDoc(args: {
 		number: args.number ?? 2,
 		leader: args.leader ?? 0,
 		turn: args.turn,
-		plays: args.plays ?? []
+		plays: args.plays ?? [],
+		winner: null
 	};
 	return doc;
 }
@@ -110,9 +111,16 @@ describe('playing out a trick', () => {
 		reduce(doc, { type: 'PlayCard', seat: 2, card: 'QS' }); // trumps in
 		reduce(doc, { type: 'PlayCard', seat: 3, card: 'KH' });
 
+		// the fourth card is held on screen until AdvanceTrick
+		expect(doc.phase).toBe('trickDone');
+		expect(doc.trick?.plays).toHaveLength(4);
+		expect(doc.trick?.winner).toBe(2);
+		expect(doc.wonBySeat[2]).toEqual([]);
+
+		reduce(doc, { type: 'AdvanceTrick' });
 		expect(doc.wonBySeat[2]).toEqual([['AH', '9H', 'QS', 'KH']]);
 		expect(doc.lastTrickWinner).toBe(2);
-		expect(doc.trick).toMatchObject({ number: 3, leader: 2, turn: 2, plays: [] });
+		expect(doc.trick).toMatchObject({ number: 3, leader: 2, turn: 2, plays: [], winner: null });
 	});
 
 	it('rejects a card that breaks suit-following', () => {

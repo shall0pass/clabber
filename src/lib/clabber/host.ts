@@ -44,6 +44,9 @@ export function nextBotAction(
 			if (seat == null || !doc.players[seat]?.isBot) return null;
 			return { type: 'PlayCard', seat, card: chooseCard(doc, seat) };
 		}
+		case 'trickDone':
+			// Collect the trick once everyone has had a moment to see it.
+			return { type: 'AdvanceTrick' };
 		case 'redeal':
 		case 'handScored':
 			// Keep an unattended game moving: re-deal / start the next hand.

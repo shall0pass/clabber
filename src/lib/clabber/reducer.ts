@@ -42,6 +42,8 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return announceMeld(doc, action);
 		case 'PlayCard':
 			return playCard(doc, action);
+		case 'AdvanceTrick':
+			return advanceTrick(doc);
 		case 'HostClaim':
 			doc.hostActorId = action.actorId;
 			return;
@@ -200,7 +202,7 @@ function bid(doc: GameDoc, a: Extract<Action, { type: 'Bid' }>): void {
 	doc.bidding = null;
 	doc.upCard = null;
 	const leader = nextSeat(doc.dealer);
-	doc.trick = { number: 1, leader, turn: leader, plays: [] };
+	doc.trick = { number: 1, leader, turn: leader, plays: [], winner: null };
 	doc.phase = 'meld';
 	doc.log.push(`seat ${a.seat} makes ${trump} trump`);
 }
@@ -234,21 +236,29 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 		return;
 	}
 
-	const winner = trickWinner(t.plays, doc.trump);
+	// Fourth card played: freeze the trick on screen. `AdvanceTrick` collects it.
+	t.winner = trickWinner(t.plays, doc.trump);
+	doc.phase = 'trickDone';
+	doc.log.push(`trick ${t.number} to seat ${t.winner}`);
+}
+
+function advanceTrick(doc: GameDoc): void {
+	if (doc.phase !== 'trickDone') fail(`no completed trick to advance (phase ${doc.phase})`);
+	const t = doc.trick;
+	if (!t || t.winner == null) fail('trick is not complete');
+
+	const winner = t.winner;
 	doc.wonBySeat[winner].push(t.plays.map((p) => p.card));
 	doc.lastTrickWinner = winner;
 	const n = t.number;
-	doc.log.push(`trick ${n} to seat ${winner}`);
 
-	if (n === 1) {
-		resolveMeld(doc);
-		doc.phase = 'trick';
-	}
+	if (n === 1) resolveMeld(doc);
 	if (n === 6) {
-		finishHand(doc);
+		finishHand(doc); // sets phase to handScored / gameOver and trick to null
 		return;
 	}
-	doc.trick = { number: n + 1, leader: winner, turn: winner, plays: [] };
+	doc.trick = { number: n + 1, leader: winner, turn: winner, plays: [], winner: null };
+	doc.phase = 'trick';
 }
 
 function finishHand(doc: GameDoc): void {

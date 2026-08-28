@@ -13,6 +13,9 @@ export type Action =
 	| { type: 'Bid'; seat: Seat; bid: Bid }
 	| { type: 'AnnounceMeld'; seat: Seat }
 	| { type: 'PlayCard'; seat: Seat; card: Card }
+	/** Collect a completed trick and move on (from phase `trickDone`). The host
+	 *  fires this after a short pause so every client sees all four cards. */
+	| { type: 'AdvanceTrick' }
 	/** Claim the "bot runner" role. Which client should claim (and when) is
 	 *  decided client-side; the reducer just records the winner. */
 	| { type: 'HostClaim'; actorId: string }
