@@ -424,11 +424,24 @@ Each phase ends green (`npm run lint`, `npm test`, app builds).
 - Notes: `artifacts/`, `CLAUDE.md`, `sync-server/data/` added to
   `.prettierignore` (vendored / runtime).
 
-### Phase 1 — Card rendering
+### Phase 1 — Card rendering — ✅ done
 
-- `scripts/slice-cards.mjs` + ordering probe; generate `src/lib/assets/cards/`.
-- `Card.svelte` (+ face‑down); a `/dev` gallery page (dev‑only) showing all 24 +
-  back.
+- [x] Ordering resolved by rendering the sheet (Playwright screenshot), not a
+      slicing script. `artifacts/PlayingCards.svg` is a 13×4 grid, cell 64×89:
+      columns `A 2 3 4 5 6 7 8 9 10 J Q K`, rows `Clubs, Hearts, Spades,
+    Diamonds`. Copied whole to `static/cards/faces.svg` (1.6 MB / ~0.5 MB
+      gzip) — no per-card slicing; cards are drawn as a CSS background sprite.
+- [x] `artifacts/CardBackscomplete.svg` (~7 MB) dropped as too heavy; replaced
+      with a hand-drawn `static/cards/back.svg` (~700 B) at the same aspect.
+- [x] `src/lib/cards/sprite.ts` — sheet paths, grid, `CARD_RATIO`,
+      `facePosition(card)`.
+- [x] `src/lib/components/Card.svelte` — `card` / `faceDown` / `height` /
+      `class`; background-sprite math, scales to any size, `role="img"` with
+      the card name as label.
+- [x] `src/routes/dev/+page.svelte` — gallery of all 24 Clabber cards + the
+      back, size slider; gated behind `$app/environment`'s `dev` so it is inert
+      in production. Verified visually via a Playwright screenshot.
+- [x] Green: lint, check, build (total build 1.8 MB, `/dev` not prerendered).
 
 ### Phase 2 — Rules engine (no UI) — ✅ done
 
