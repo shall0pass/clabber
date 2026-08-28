@@ -548,6 +548,18 @@ one compat test):
   set `PUBLIC_SYNC_URL` for the production build; smoke test 4 real devices.
 - Cleanup: remove unused Drizzle/`better-sqlite3` scaffold if still unused.
 
+**Containers (available now).** `Dockerfile` (root) builds the SPA with
+`node:22-alpine` and serves `build/` from `nginx:1.27-alpine`
+(`docker/nginx.conf` does the SPA `try_files … /index.html` fallback and
+long‑caches `/_app/immutable/`). `sync-server/Dockerfile` runs the relay with a
+`/health` `HEALTHCHECK`. `docker-compose.yml` wires both:
+`docker compose up --build` → web on `:8080`, sync on `:3030` with a
+`sync-data` volume. `PUBLIC_SYNC_URL` is baked into the web image at build
+time; override it for a real deployment with
+`CLABBER_SYNC_URL=wss://sync.example.com docker compose up --build` (a
+compose‑only variable, kept distinct from the `PUBLIC_SYNC_URL` in the local
+dev `.env`). `.dockerignore` keeps the local `.env` out of the image build.
+
 ---
 
 ## 11. Testing strategy
