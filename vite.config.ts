@@ -33,13 +33,7 @@ export default defineConfig({
 			// The game is a fully client-side SPA (Automerge/wasm is browser-only),
 			// deployed as a static site. `fallback` makes every route serve the
 			// client shell so client-side routing takes over.
-			adapter: adapter({ fallback: 'index.html' }),
-
-			typescript: {
-				config: (config) => {
-					config.include.push('../drizzle.config.ts');
-				}
-			}
+			adapter: adapter({ fallback: 'index.html' })
 		})
 	],
 	optimizeDeps: {

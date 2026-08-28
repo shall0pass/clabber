@@ -16,9 +16,9 @@ ARG PUBLIC_SYNC_URL=ws://localhost:3030
 ENV PUBLIC_SYNC_URL=$PUBLIC_SYNC_URL
 
 COPY package.json package-lock.json ./
-# --ignore-scripts skips the better-sqlite3 native build (Drizzle scaffolding
-# the SPA never touches); the Vite/Rolldown/Tailwind platform binaries arrive
-# as optional deps, not scripts.
+# --ignore-scripts: nothing in the tree needs a postinstall (the
+# Vite/Rolldown/Tailwind platform binaries arrive as optional deps), and it
+# keeps the build fast and deterministic.
 RUN npm ci --ignore-scripts
 
 COPY . .
