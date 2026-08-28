@@ -120,6 +120,23 @@ describe('ResetToLobby', () => {
 	});
 });
 
+describe('SetAdvanced', () => {
+	it('toggles the flag in the lobby', () => {
+		const doc = createGame('T', 0);
+		expect(doc.advanced).toBe(false);
+		reduce(doc, { type: 'SetAdvanced', on: true });
+		expect(doc.advanced).toBe(true);
+		reduce(doc, { type: 'SetAdvanced', on: false });
+		expect(doc.advanced).toBe(false);
+	});
+
+	it('cannot be changed once a hand is dealt', () => {
+		const doc = fourBots();
+		reduce(doc, { type: 'StartHand', seed: 'lock' });
+		expect(() => reduce(doc, { type: 'SetAdvanced', on: true })).toThrow(RuleError);
+	});
+});
+
 describe('renege (Advanced mode)', () => {
 	// Hearts led; seat 1 holds hearts, so QS / AD are illegal for it.
 	function midTrick(): GameDoc {

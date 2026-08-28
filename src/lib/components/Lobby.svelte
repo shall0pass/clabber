@@ -31,6 +31,7 @@
 	const baseSeat = $derived(mySeat ?? 0);
 	const filled = $derived(players.every((p) => p != null));
 	const hasHuman = $derived(players.some((p) => p != null && !p.isBot));
+	const advanced = $derived(doc?.advanced ?? false);
 
 	// slot 0 bottom, 1 left, 2 top, 3 right — rotated so my seat is at the bottom.
 	const slotClass = ['area-bottom', 'area-left', 'area-top', 'area-right'];
@@ -70,6 +71,9 @@
 	}
 	function deal() {
 		store.change({ type: 'StartHand', seed: crypto.randomUUID() });
+	}
+	function toggleAdvanced() {
+		store.change({ type: 'SetAdvanced', on: !advanced });
 	}
 
 	let copied = $state(false);
@@ -151,6 +155,24 @@
 			Deal
 		</button>
 	</div>
+
+	<label
+		class="flex max-w-sm cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-4 py-3 text-sm ring-1 ring-white/10"
+	>
+		<input
+			type="checkbox"
+			class="mt-0.5 h-4 w-4 accent-red-500"
+			checked={advanced}
+			onchange={toggleAdvanced}
+		/>
+		<span>
+			<span class="font-semibold">Advanced: allow reneging</span>
+			<span class="mt-0.5 block text-white/50">
+				Players may play any card. An illegal one is a renege — the other team takes 162 plus their
+				meld. Set this before the deal; it's locked once the game starts.
+			</span>
+		</span>
+	</label>
 </div>
 
 <style>

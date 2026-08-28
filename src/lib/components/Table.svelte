@@ -70,23 +70,9 @@
 			teamOf(mySeat) !== doc.winner
 	);
 
-	// Advanced mode: play any card; an illegal one is a renege. Per-tab setting.
-	let advanced = $state(readAdvanced());
-	function readAdvanced() {
-		try {
-			return localStorage.getItem('clabber:advanced') === '1';
-		} catch {
-			return false;
-		}
-	}
-	function toggleAdvanced() {
-		advanced = !advanced;
-		try {
-			localStorage.setItem('clabber:advanced', advanced ? '1' : '0');
-		} catch {
-			/* ignore */
-		}
-	}
+	// Advanced mode: play any card; an illegal one is a renege. Chosen in the
+	// lobby and locked for the game, so it lives on the shared doc.
+	const advanced = $derived(doc?.advanced ?? false);
 
 	function play(card: CardT) {
 		if (mySeat == null) return;
@@ -124,7 +110,7 @@
 	// shrink cards on small screens
 	let uiScale = $state(1);
 	$effect(() => {
-		const fit = () => (uiScale = Math.max(0.62, Math.min(1, window.innerWidth / 780)));
+		const fit = () => (uiScale = Math.max(0.66, Math.min(1, window.innerWidth / 720)));
 		fit();
 		window.addEventListener('resize', fit);
 		return () => window.removeEventListener('resize', fit);
@@ -188,7 +174,7 @@
 							tricks={teamTricks(seat)}
 						/>
 						{#if seat !== mySeat}
-							<CardFan count={doc.hands[seat].length} height={px(46)} />
+							<CardFan count={doc.hands[seat].length} height={px(52)} />
 						{/if}
 					</div>
 				{/each}
@@ -238,7 +224,7 @@
 					legal={myLegal}
 					active={handActive}
 					{advanced}
-					height={px(118)}
+					height={px(140)}
 					onplay={play}
 				/>
 			{:else}
@@ -246,17 +232,12 @@
 			{/if}
 		</div>
 
-		{#if mySeat != null}
-			<button
-				onclick={toggleAdvanced}
-				class="absolute right-3 bottom-3 rounded-lg px-2 py-1 text-[11px] ring-1 transition
-					{advanced
-					? 'bg-red-500/20 text-red-200 ring-red-400/40'
-					: 'bg-white/5 text-white/40 ring-white/10 hover:text-white/70'}"
-				aria-pressed={advanced}
+		{#if advanced}
+			<span
+				class="absolute right-3 bottom-3 rounded-lg bg-red-500/20 px-2 py-1 text-[11px] text-red-200 ring-1 ring-red-400/40"
 			>
-				Advanced {advanced ? 'on' : 'off'}
-			</button>
+				Advanced (renege)
+			</span>
 		{/if}
 
 		<LogFeed log={doc.log} players={doc.players} />

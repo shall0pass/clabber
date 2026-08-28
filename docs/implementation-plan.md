@@ -704,12 +704,14 @@ with `wrangler pages dev` against the real public relay.
 - **Trust model:** hands are readable in the raw doc. If this ever needs to be
   real, revisit per‑seat encryption (keys derived from the code) — designed
   around but not built.
-- **Renege** — an **Advanced mode** (per-tab toggle, bottom-right of the table)
-  lets a player play any card in hand. Playing one that breaks follow/trump
-  rules sets `doc.renege` and ends the hand via `finishRenegedHand`: the
-  reneging team scores 0, their opponents score 162 + their own announced
-  meld. The score modal shows "Renege!". Bots never renege (they gate on
-  `legalMoves`); a "call renege on someone else" flow is still future work.
+- **Renege** — an **Advanced mode** (a game-wide `doc.advanced` flag, chosen
+  with a checkbox in the lobby and locked once the deal starts — the reducer
+  rejects `SetAdvanced` outside `phase === 'lobby'`) lets any player play any
+  card in hand. Playing one that breaks follow/trump rules sets `doc.renege`
+  and ends the hand via `finishRenegedHand`: the reneging team scores 0, their
+  opponents score 162 + their own announced meld. The score modal shows
+  "Renege!". Bots never renege (they gate on `legalMoves`); a "call renege on
+  someone else" flow is still future work.
 - **Automerge wasm on static hosts:** ensure the host serves `.wasm` with the
   right MIME type; the Vite plugin inlines/handles this but verify on the CDN.
 - **Tie at/over 500 "play another hand"** — implemented in `score.ts`; make sure

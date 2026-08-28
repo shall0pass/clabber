@@ -21,17 +21,17 @@
 		winner?: Seat | null;
 	} = $props();
 
-	const felt = $derived(Math.round(150 * scale));
-	const cardH = $derived(Math.round(52 * scale));
+	const felt = $derived(Math.round(160 * scale));
+	const cardH = $derived(Math.round(60 * scale));
 
 	// Each played card sits just outside the felt circle so it never covers the
 	// trump / trick / score text in the middle. slot: 0 bottom, 1 left, 2 top,
 	// 3 right.
 	const SLOT_POS = [
-		'left-1/2 bottom-0 -translate-x-1/2 translate-y-[58%]',
-		'top-1/2 left-0 -translate-y-1/2 -translate-x-[58%]',
-		'left-1/2 top-0 -translate-x-1/2 -translate-y-[58%]',
-		'top-1/2 right-0 -translate-y-1/2 translate-x-[58%]'
+		'left-1/2 bottom-0 -translate-x-1/2 translate-y-[68%]',
+		'top-1/2 left-0 -translate-y-1/2 -translate-x-[68%]',
+		'left-1/2 top-0 -translate-x-1/2 -translate-y-[68%]',
+		'top-1/2 right-0 -translate-y-1/2 translate-x-[68%]'
 	];
 	function slot(seat: Seat) {
 		return (seat - baseSeat + 4) % 4;

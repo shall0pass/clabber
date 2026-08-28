@@ -109,6 +109,9 @@ export interface GameDoc {
 	players: (PlayerSlot | null)[];
 
 	phase: Phase;
+	/** Advanced (renege) mode — chosen in the lobby, then locked for the game.
+	 *  When on, a player may play any card in hand; an illegal one is a renege. */
+	advanced: boolean;
 	dealer: Seat;
 	/** Seed of the current deal (kept for replay / debugging). */
 	seed: string;

@@ -7,6 +7,9 @@ export type Action =
 	| { type: 'LeaveSeat'; seat: Seat }
 	| { type: 'RenameSeat'; seat: Seat; name: string }
 	| { type: 'SetBot'; seat: Seat; isBot: boolean; botName?: string }
+	/** Turn Advanced (renege) mode on or off. Only allowed in the lobby — once a
+	 *  hand is dealt the setting is frozen for the rest of the game. */
+	| { type: 'SetAdvanced'; on: boolean }
 	/** Deal the next hand. From `handScored` the deal advances to the next
 	 *  dealer; from `redeal` (or the first hand) it keeps the current dealer. */
 	| { type: 'StartHand'; seed: string }

@@ -34,6 +34,8 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return renameSeat(doc, action);
 		case 'SetBot':
 			return setBot(doc, action);
+		case 'SetAdvanced':
+			return setAdvanced(doc, action);
 		case 'StartHand':
 			return startHand(doc, action);
 		case 'Bid':
@@ -129,6 +131,12 @@ function setBot(doc: GameDoc, a: Extract<Action, { type: 'SetBot' }>): void {
 	} else if (doc.players[a.seat]?.isBot) {
 		doc.players[a.seat] = null;
 	}
+}
+
+function setAdvanced(doc: GameDoc, a: Extract<Action, { type: 'SetAdvanced' }>): void {
+	if (doc.phase !== 'lobby')
+		fail(`Advanced mode can only change in the lobby (phase ${doc.phase})`);
+	doc.advanced = a.on;
 }
 
 // --- dealing -------------------------------------------------------------

@@ -18,6 +18,7 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 		hostActorId: '',
 		players: [null, null, null, null],
 		phase: 'lobby',
+		advanced: false,
 		dealer: 0,
 		seed: '',
 		hands: [[], [], [], []],
