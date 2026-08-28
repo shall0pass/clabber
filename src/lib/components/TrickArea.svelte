@@ -21,30 +21,39 @@
 		winner?: Seat | null;
 	} = $props();
 
-	const felt = $derived(Math.round(160 * scale));
-	const cardH = $derived(Math.round(60 * scale));
+	// Big, readable played cards around a central puck that shows trump / trick /
+	// score. `gap` is the clear ring between the puck and the inner edge of each
+	// card, so the puck text is never covered.
+	const cardH = $derived(Math.round(110 * scale));
+	const cardW = $derived(Math.round(cardH * (64 / 89)));
+	const puck = $derived(Math.round(116 * scale));
+	const gap = $derived(Math.round(puck / 2 + 12 * scale));
 
-	// Each played card sits just outside the felt circle so it never covers the
-	// trump / trick / score text in the middle. slot: 0 bottom, 1 left, 2 top,
-	// 3 right.
-	const SLOT_POS = [
-		'left-1/2 bottom-0 -translate-x-1/2 translate-y-[68%]',
-		'top-1/2 left-0 -translate-y-1/2 -translate-x-[68%]',
-		'left-1/2 top-0 -translate-x-1/2 -translate-y-[68%]',
-		'top-1/2 right-0 -translate-y-1/2 translate-x-[68%]'
-	];
+	// Offset of each card's centre from the middle of the table. slot: 0 bottom,
+	// 1 left, 2 top, 3 right.
+	const offsets = $derived([
+		{ x: 0, y: gap + cardH / 2 },
+		{ x: -(gap + cardW / 2), y: 0 },
+		{ x: 0, y: -(gap + cardH / 2) },
+		{ x: gap + cardW / 2, y: 0 }
+	]);
 	function slot(seat: Seat) {
 		return (seat - baseSeat + 4) % 4;
 	}
+
+	const boxW = $derived(2 * (gap + cardW));
+	const boxH = $derived(2 * (gap + cardH));
 
 	const plays = $derived(doc.trick?.plays ?? []);
 	const trump = $derived(doc.trump);
 </script>
 
-<div class="relative grid place-items-center" style:width="{felt}px" style:height="{felt}px">
+<div class="relative" style:width="{boxW}px" style:height="{boxH}px">
 	<div
-		class="grid aspect-square w-full place-items-center rounded-full text-center leading-tight"
-		style="background: radial-gradient(circle at 50% 40%, #157a4a, #0a5c36 72%); box-shadow: inset 0 0 36px rgba(0,0,0,0.4);"
+		class="absolute top-1/2 left-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-center leading-tight"
+		style:width="{puck}px"
+		style:height="{puck}px"
+		style="background: radial-gradient(circle at 50% 40%, #157a4a, #0a5c36 72%); box-shadow: inset 0 0 36px rgba(0,0,0,0.45);"
 	>
 		<div class="text-white/85">
 			{#if trump}
@@ -61,9 +70,11 @@
 	</div>
 
 	{#each plays as play (play.seat)}
+		{@const o = offsets[slot(play.seat)]}
 		<div
-			class="absolute transition-transform duration-200 {SLOT_POS[slot(play.seat)]}"
+			class="absolute top-1/2 left-1/2 transition-transform duration-200"
 			class:trick-winner={winner === play.seat}
+			style:transform="translate(-50%, -50%) translate({o.x}px, {o.y}px)"
 		>
 			<Card card={play.card} height={cardH} />
 		</div>
@@ -72,8 +83,11 @@
 
 <style>
 	.trick-winner {
-		scale: 1.12;
 		filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.9));
 		z-index: 1;
+	}
+	.trick-winner :global(.card) {
+		outline: 2px solid rgba(74, 222, 128, 0.9);
+		outline-offset: 1px;
 	}
 </style>

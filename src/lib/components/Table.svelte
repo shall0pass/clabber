@@ -26,9 +26,13 @@
 
 	// screen slot: 0 bottom, 1 left, 2 top, 3 right — rotate so I'm at the bottom
 	const AREA = ['area-bottom', 'area-left', 'area-top', 'area-right'];
-	function areaFor(seat: Seat) {
-		return AREA[(seat - baseSeat + 4) % 4];
+	function screenSlot(seat: Seat) {
+		return (seat - baseSeat + 4) % 4;
 	}
+	function areaFor(seat: Seat) {
+		return AREA[screenSlot(seat)];
+	}
+	const SIDE = ['bottom', 'left', 'top', 'right'] as const;
 	function relationFor(seat: Seat): 'you' | 'partner' | 'opponent' {
 		if (mySeat == null) return 'opponent';
 		if (seat === mySeat) return 'you';
@@ -110,7 +114,7 @@
 	// shrink cards on small screens
 	let uiScale = $state(1);
 	$effect(() => {
-		const fit = () => (uiScale = Math.max(0.66, Math.min(1, window.innerWidth / 720)));
+		const fit = () => (uiScale = Math.max(0.58, Math.min(1, window.innerWidth / 720)));
 		fit();
 		window.addEventListener('resize', fit);
 		return () => window.removeEventListener('resize', fit);
@@ -161,22 +165,31 @@
 		<div class="flex flex-1 flex-col items-center justify-center gap-4">
 			<div class="table-grid">
 				{#each SEATS as seat (seat)}
-					<div class="{areaFor(seat)} flex max-w-full min-w-0 flex-col items-center gap-1.5">
-						<PlayerPlate
-							player={doc.players[seat]}
-							relation={relationFor(seat)}
-							isDealer={seat === doc.dealer}
-							isTurn={seat === currentSeat}
-							isThinking={seat === currentSeat && (doc.players[seat]?.isBot ?? false)}
-							justWon={seat === flashSeat}
-							online={doc.players[seat]?.isBot || presence.isOnline(doc.players[seat]?.actorId)}
-							lastBid={lastBid(seat)}
-							tricks={teamTricks(seat)}
-						/>
-						{#if seat !== mySeat}
+					{#if mySeat == null || seat !== mySeat}
+						{@const slot = screenSlot(seat)}
+						<!-- My own plate is rendered just above my hand instead, so a card
+						     I play into the centre never lands on my name. On a narrow
+						     screen the left/right plates sit sideways, outboard of the
+						     cards, so long names have room to run vertically. -->
+						<div
+							class="{areaFor(seat)} flex max-w-full min-w-0 items-center gap-0.5 sm:gap-1.5
+								{slot === 1 ? 'flex-row sm:flex-col' : slot === 3 ? 'flex-row-reverse sm:flex-col' : 'flex-col'}"
+						>
+							<PlayerPlate
+								player={doc.players[seat]}
+								relation={relationFor(seat)}
+								side={SIDE[slot]}
+								isDealer={seat === doc.dealer}
+								isTurn={seat === currentSeat}
+								isThinking={seat === currentSeat && (doc.players[seat]?.isBot ?? false)}
+								justWon={seat === flashSeat}
+								online={doc.players[seat]?.isBot || presence.isOnline(doc.players[seat]?.actorId)}
+								lastBid={lastBid(seat)}
+								tricks={teamTricks(seat)}
+							/>
 							<CardFan count={doc.hands[seat].length} height={px(52)} />
-						{/if}
-					</div>
+						</div>
+					{/if}
 				{/each}
 
 				<div class="area-center">
@@ -212,10 +225,21 @@
 			{/if}
 		</div>
 
-		<div class="w-full">
+		<div class="flex w-full flex-col items-center gap-1.5">
 			{#if mySeat != null}
+				<PlayerPlate
+					player={doc.players[mySeat]}
+					relation="you"
+					isDealer={mySeat === doc.dealer}
+					isTurn={mySeat === currentSeat}
+					isThinking={false}
+					justWon={mySeat === flashSeat}
+					online={true}
+					lastBid={lastBid(mySeat)}
+					tricks={teamTricks(mySeat)}
+				/>
 				{#if advanced && handActive}
-					<p class="pb-1 text-center text-xs text-red-300">
+					<p class="text-center text-xs text-red-300">
 						Advanced: any card is playable — an illegal one is a renege.
 					</p>
 				{/if}
@@ -254,11 +278,11 @@
 	}
 	.table-grid {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 		grid-template-rows: auto auto auto;
-		gap: clamp(0.4rem, 3vw, 1.25rem) clamp(0.5rem, 6vw, 2.5rem);
+		gap: clamp(0.3rem, 3vw, 1.25rem) clamp(0.15rem, 3vw, 1.75rem);
 		place-items: center;
-		width: min(96vw, 680px);
+		width: min(100%, 760px);
 	}
 	.area-top {
 		grid-area: 1 / 2;
