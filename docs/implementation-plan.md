@@ -234,7 +234,13 @@ Fully unit‑tested pure functions. This is the heart of correctness.
 | `meld.ts`    | Detect all melds in a hand (sequences ≥3 in a suit using `9 T J Q K A`; four‑of‑a‑kind; four jacks = 200; bella = K+Q trump). `compareMeld` for "highest meld wins team scoring", equal‑sequence rules (length, then top card, then trump beats non‑trump, else nobody), bella always scores, "dad 'a' belle" 40.                                                    |
 | `score.ts`   | End‑of‑hand: trick points per team (+10 last trick, 162 total), add meld, apply **set** rule (maker must strictly out‑score opponents incl. meld or scores 0 and, if set, loses meld unless meld+tricks still outscores), write `HandResult`, update running score, detect ≥500 winner and tie‑break ("both ≥500 → higher total; tie over 500 → play another hand"). |
 | `reducer.ts` | `reduce(doc, action, ctx)` — the single entry point every client calls inside `handle.change(...)`. Validates the action against `phase`/`turn`, mutates the draft. All UI and bot code go through this.                                                                                                                                                             |
-| `actions.ts` | Action type union: `JoinSeat`, `LeaveSeat`, `RenameSeat`, `ToggleBotFill`, `StartHand`, `Bid`, `AnnounceMeld`, `ShowMeld`, `PlayCard`, `AdvanceAfterHand`, `Heartbeat`, `ClaimHost`.                                                                                                                                                                                 |
+| `actions.ts` | Action type union: `JoinSeat`, `LeaveSeat`, `RenameSeat`, `SetBot`, `StartHand`, `Bid`, `AnnounceMeld`, `PlayCard`. Presence/host actions are added in Phase 3/4.                                                                                                                                                                                                    |
+
+> **As built (Phase 2):** see the Phase 2 checklist in §10 for what actually
+> shipped and which sketched pieces were dropped or merged. `deal.ts` uses a
+> local xmur3→mulberry32 PRNG (`rng.ts`), not `seedrandom`. `bidding.ts` /
+> `play.ts` expose only the `legal*` query functions; the corresponding
+> mutations live in `reducer.ts`.
 
 Renege handling: keep **light** — the engine simply never offers an illegal
 move in `legalMoves`, so honest clients and bots can't renege. A "call renege"
@@ -424,16 +430,41 @@ Each phase ends green (`npm run lint`, `npm test`, app builds).
 - `Card.svelte` (+ face‑down); a `/dev` gallery page (dev‑only) showing all 24 +
   back.
 
-### Phase 2 — Rules engine (no UI)
+### Phase 2 — Rules engine (no UI) — ✅ done
 
-- `types.ts`, `cards.ts`, `deal.ts` with seeded shuffle + tests.
-- `bidding.ts`, `play.ts`, `meld.ts`, `score.ts`, `reducer.ts`, `actions.ts`.
-- Extensive `*.spec.ts`, including worked examples from the rules doc: 162‑point
-  total, set rule, meld comparison ties, bella / "dad 'a' belle" 40, last‑trick
-  +10, round‑2 forbidden suit, must‑overtrump.
-- A `simulate.ts` test helper that plays full random games with 4 bots to
-  assert invariants (points conserved, hands empty after 6 tricks, someone
-  reaches 500, no illegal move ever offered).
+All under `src/lib/clabber/` (pure; no Svelte, no Automerge import except the
+one compat test):
+
+- [x] `types.ts`, `cards.ts`, `rng.ts` (seeded xmur3→mulberry32), `deal.ts`,
+      `state.ts` (seat/team helpers + `createGame`).
+- [x] `bidding.ts` (`legalBids`), `play.ts` (`legalMoves`), `meld.ts`
+      (`detectMelds` / `selectBestMelds` / `compareMeldClaim` / `resolveMeld`),
+      `score.ts` (`scoreHand` / `checkGameEnd`).
+- [x] `actions.ts` + `reducer.ts` — one `reduce(doc, action)` that mutates in
+      place and throws `RuleError`. `AdvanceAfterHand`, `ShowMeld`,
+      `ToggleBotFill`, and the presence actions from the original sketch were
+      dropped: `StartHand` covers "next hand" (it advances the dealer from
+      `handScored`, keeps it from `redeal`); meld "show" is automatic in a
+      digital game; presence/host actions belong to Phase 3/4.
+- [x] `bot.ts` — heuristic `chooseBid` / `chooseCard`; `simulate.ts` —
+      `playRandomGame(seed)`.
+- [x] 71 tests across 9 spec files. Worked rules examples covered: 162-point
+      total, non-trump vs trump order & points, follow-suit / mandatory
+      trump-in / mandatory overtrump (incl. over partner) / no obligation on a
+      non-trump follow, trick winner, round-1 accept, round-1 all-pass →
+      round-2 with the passed suit forbidden, round-2 all-pass → redeal (same
+      dealer), can't declare a suit you're void in, meld detection (dad / fifty
+      / hundred / four aces / four jacks / bella / "dad 'a' belle" = 40 / two
+      dads), meld comparison (points, top card, trump-beats-non-trump, equal
+      non-trump push, bella always scores), set rule (incl. meld saving or not
+      saving the makers), game end at 500 / both-over-500 / exact-tie replay.
+- [x] `simulate.spec.ts` fuzzes 40 full bot games: every one terminates, ends
+      `gameOver` with a valid leading winner, every hand conserves 162 trick
+      points, no illegal move is ever produced, and results are deterministic
+      per seed.
+- [x] `automerge-compat.spec.ts` — `reduce` runs inside `Automerge.change()`
+      and two peers converge, de-risking Phase 3.
+- [x] Green: `npm run lint`, `npm run check`, `npm test` (71), `npm run build`.
 
 ### Phase 3 — Networking & lobby
 
