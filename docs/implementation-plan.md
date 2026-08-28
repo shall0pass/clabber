@@ -600,10 +600,25 @@ one compat test):
 - Deferred to Phase 7: tighter card fanning / responsive sizing, a visible
   log feed, trick animation.
 
-### Phase 6 — Win / lose
+### Phase 6 — Win / lose — ✅ done
 
-- `Fireworks.svelte` (canvas‑confetti) on the winners' half; `Tears.svelte`
-  crying animation on the losers' half; desaturate losers. "Play again".
+- [x] `Fireworks.svelte` — full-screen `canvas-confetti` on its own canvas:
+      an intense two-sided volley for ~3.5 s, then gentle bursts every ~1.1 s
+      until unmounted; `useWorker` for smoothness; cleaned up on destroy.
+- [x] `Tears.svelte` — 30 SVG teardrops falling on staggered CSS `fall`
+      keyframes (random x / delay / duration / scale / drift).
+- [x] Both honour `prefers-reduced-motion` (static 🎆 / 😢 instead).
+- [x] `GameOver.svelte` shows `<Fireworks>` when you won or are spectating,
+      `<Tears>` when you lost; card reads "Your team wins! 🎉" / "Your team
+      lost" / "Team N wins"; **Play again** → `ResetToLobby`. Rendered outside
+      the table's `.lost` filter so the overlays stay sharp and viewport-fixed.
+- [x] `Table.svelte` desaturates (`filter: saturate(.3) brightness(.85)`,
+      1 s transition) for the losing viewer only.
+- [x] Tests: `GameOver.svelte.spec.ts` (chromium, `canvas-confetti` mocked) —
+      win / loss / spectator text and Play again. 111 total.
+- [x] Verified visually: win (confetti + card), loss (falling tears +
+      desaturated table + card), spectator (confetti + "Team N wins"), and
+      Play again returns to the lobby.
 
 ### Phase 7 — Polish & deploy
 

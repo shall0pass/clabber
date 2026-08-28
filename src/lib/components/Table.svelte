@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SEATS, partnerSeat } from '$lib/clabber/state';
+	import { SEATS, partnerSeat, teamOf } from '$lib/clabber/state';
 	import { sortHand } from '$lib/clabber/cards';
 	import { legalMoves } from '$lib/clabber/play';
 	import { trickPointsSoFar } from '$lib/clabber/score';
@@ -62,6 +62,12 @@
 			doc.trick?.turn === mySeat
 	);
 	const handPoints = $derived(doc ? trickPointsSoFar(doc) : ([0, 0] as [number, number]));
+	const iLost = $derived(
+		doc?.phase === 'gameOver' &&
+			doc.winner != null &&
+			mySeat != null &&
+			teamOf(mySeat) !== doc.winner
+	);
 
 	function play(card: CardT) {
 		if (mySeat != null) store.tryChange({ type: 'PlayCard', seat: mySeat, card });
@@ -84,7 +90,10 @@
 </script>
 
 {#if doc}
-	<div class="relative flex min-h-screen flex-col items-center gap-4 bg-green-900 p-4 text-white">
+	<div
+		class="relative flex min-h-screen flex-col items-center gap-4 bg-green-900 p-4 text-white transition-[filter] duration-1000"
+		class:lost={iLost}
+	>
 		<div class="absolute top-3 right-3 z-20">
 			<Scoreboard {store} onNextHand={nextHand} />
 		</div>
@@ -139,12 +148,17 @@
 				<p class="pb-4 text-center text-sm text-white/40">You're watching this game.</p>
 			{/if}
 		</div>
-
-		<GameOver {store} />
 	</div>
+
+	<!-- Outside the .lost filter so the fixed overlays position against the
+	     viewport and the fireworks/tears keep their colour. -->
+	<GameOver {store} />
 {/if}
 
 <style>
+	.lost {
+		filter: saturate(0.3) brightness(0.85);
+	}
 	.table-grid {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
