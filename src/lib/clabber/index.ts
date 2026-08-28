@@ -13,4 +13,5 @@ export * from './actions';
 export * from './reducer';
 export * from './bot';
 export * from './botNames';
+export * from './host';
 export * from './simulate';

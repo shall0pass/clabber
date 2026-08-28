@@ -42,6 +42,9 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return announceMeld(doc, action);
 		case 'PlayCard':
 			return playCard(doc, action);
+		case 'HostClaim':
+			doc.hostActorId = action.actorId;
+			return;
 	}
 }
 

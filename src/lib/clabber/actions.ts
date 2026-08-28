@@ -12,6 +12,9 @@ export type Action =
 	| { type: 'StartHand'; seed: string }
 	| { type: 'Bid'; seat: Seat; bid: Bid }
 	| { type: 'AnnounceMeld'; seat: Seat }
-	| { type: 'PlayCard'; seat: Seat; card: Card };
+	| { type: 'PlayCard'; seat: Seat; card: Card }
+	/** Claim the "bot runner" role. Which client should claim (and when) is
+	 *  decided client-side; the reducer just records the winner. */
+	| { type: 'HostClaim'; actorId: string };
 
 export type ActionType = Action['type'];

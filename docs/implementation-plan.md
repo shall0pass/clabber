@@ -518,12 +518,38 @@ one compat test):
       tabs advance → reload rejoins via `#code`), and presence dots go green
       both ways.
 
-### Phase 4 — Host & bots
+### Phase 4 — Host & bots — ✅ done
 
-- `host.ts`: election + heartbeat‑based takeover + reconciler with humanised
-  delays. `bot.ts` + `botNames.ts`.
-- Test: 1 human + 3 bots plays a whole game unattended; drop/rejoin the human
-  and a bot mid‑hand, host migrates, no double‑plays.
+- [x] `src/lib/clabber/host.ts` (pure): `pickHost(onlineIds)` (smallest id
+      wins, so every client agrees) and `nextBotAction(doc)` — the single move
+      the bot-runner owes for the current position, or `null` on a human's
+      turn / lobby / game over. Announces meld before the first card;
+      auto-`StartHand`s from `redeal` and `handScored`.
+- [x] New action `HostClaim { actorId }` → writes `doc.hostActorId` (Automerge
+      LWW settles a concurrent claim; election logic lives client-side).
+- [x] `src/lib/repo/host.ts` — `class Host`: on a 2.5 s tick and on every doc
+      change it (a) claims the role if `hostActorId` is empty or its owner is
+      offline per presence and this tab is `pickHost`, and (b) if `isHost`,
+      schedules `nextBotAction` after a humanising delay (450–1150 ms;
+      2.5 s between hands, 0.7 s before a re-deal), re-deriving from the live
+      doc before applying and swallowing the `RuleError` if another client
+      raced it.
+- [x] Faster handover: `Presence` now broadcasts a `bye` on `stop()` /
+      `beforeunload` and drops that client immediately; staleness window
+      lowered to 12 s (3 missed beats) and shared with `HOST_STALE_MS`.
+- [x] `+page.svelte` starts/stops a `Host`; shows "You're running the computer
+      players" when `host.isHost`; exposes `window.__clabber` in dev.
+- [x] Tests (94 total): `host.spec.ts` — `pickHost`, `HostClaim`,
+      `nextBotAction` per phase incl. driving four bots to 500;
+      `host.svelte.spec.ts` (chromium) — claims the role, drives bots off the
+      lobby, stands down for a live foreign host, and **takes over a stale
+      host mid-hand and finishes the game**.
+- [x] Live 2-tab Playwright check: the two tabs elect a single host, bots bid
+      and play with no human input, and closing the host tab hands off to the
+      other in ~10 s.
+- Note: a full unattended game with a _seated human_ isn't demoable end-to-end
+  until the Phase 5 table UI gives that human a way to play; the pure and
+  chromium tests cover the bot-only path.
 
 ### Phase 5 — Table & play UI
 

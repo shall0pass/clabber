@@ -1,6 +1,6 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "clabber",
-  "pages_build_output_dir": "./build",
-  "compatibility_date": "2026-08-28"
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "clabber",
+	"pages_build_output_dir": "./build",
+	"compatibility_date": "2026-08-28"
 }

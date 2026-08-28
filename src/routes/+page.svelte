@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { dev } from '$app/environment';
 	import JoinScreen from '$lib/components/JoinScreen.svelte';
 	import Lobby from '$lib/components/Lobby.svelte';
 	import { GameStore, joinExistingGame } from '$lib/repo/gameStore.svelte';
 	import { Presence } from '$lib/repo/presence.svelte';
+	import { Host } from '$lib/repo/host';
 
 	let store = $state<GameStore | undefined>(undefined);
 	let presence = $state<Presence | undefined>(undefined);
+	let host = $state<Host | undefined>(undefined);
 	let booting = $state(true);
 	let bootError = $state('');
 
@@ -20,23 +23,34 @@
 		const p = new Presence(s.handle, s.clientId);
 		p.start();
 		presence = p;
+
+		const h = new Host(s, p);
+		h.start();
+		host = h;
+
+		if (dev) {
+			(globalThis as Record<string, unknown>).__clabber = { store: s, presence: p, host: h };
+		}
 	}
 
 	onMount(() => {
 		const code = location.hash.replace(/^#+/, '');
-		if (!code) {
+		if (code) {
+			joinExistingGame(code)
+				.then((s) => {
+					if (s) attach(s);
+					else bootError = `No game with code "${code}".`;
+				})
+				.catch(() => (bootError = 'Could not reach the game server.'))
+				.finally(() => (booting = false));
+		} else {
 			booting = false;
-			return;
 		}
-		joinExistingGame(code)
-			.then((s) => {
-				if (s) attach(s);
-				else bootError = `No game with code "${code}".`;
-			})
-			.catch(() => (bootError = 'Could not reach the game server.'))
-			.finally(() => (booting = false));
 
-		return () => presence?.stop();
+		return () => {
+			host?.stop();
+			presence?.stop();
+		};
 	});
 
 	const phase = $derived(store?.doc?.phase);
@@ -54,6 +68,9 @@
 				<p class="text-sm text-white/60">
 					Phase: {phase}. The table view arrives in a later step.
 				</p>
+				{#if host?.isHost}
+					<p class="mt-2 text-xs text-white/40">You're running the computer players.</p>
+				{/if}
 			</div>
 		</div>
 	{/if}
