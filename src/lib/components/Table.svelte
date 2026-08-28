@@ -111,10 +111,14 @@
 		store.tryChange({ type: 'AdvanceTrick' });
 	}
 
-	// shrink cards on small screens
+	// shrink cards on small screens; below `sm` the side seats stack vertically
 	let uiScale = $state(1);
+	let isNarrow = $state(false);
 	$effect(() => {
-		const fit = () => (uiScale = Math.max(0.58, Math.min(1, window.innerWidth / 720)));
+		const fit = () => {
+			uiScale = Math.max(0.58, Math.min(1, window.innerWidth / 720));
+			isNarrow = window.innerWidth < 640;
+		};
 		fit();
 		window.addEventListener('resize', fit);
 		return () => window.removeEventListener('resize', fit);
@@ -187,7 +191,11 @@
 								lastBid={lastBid(seat)}
 								tricks={teamTricks(seat)}
 							/>
-							<CardFan count={doc.hands[seat].length} height={px(52)} />
+							<CardFan
+								count={doc.hands[seat].length}
+								height={px(52)}
+								vertical={isNarrow && (slot === 1 || slot === 3)}
+							/>
 						</div>
 					{/if}
 				{/each}
