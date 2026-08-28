@@ -29,11 +29,11 @@
 		<div class="rounded-2xl bg-green-950/95 p-8 shadow-2xl ring-1 ring-white/15">
 			<h2 class="text-3xl font-bold">
 				{#if mySeat == null}
-					Team {winner} wins
+					Team {winner + 1} wins
 				{:else if iWon}
-					Your team wins! 🎉
+					We won! 🎉
 				{:else}
-					Your team lost
+					We lost
 				{/if}
 			</h2>
 			<p class="mt-2 text-sm text-white/60">Final: {running[0]} – {running[1]}</p>

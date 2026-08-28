@@ -9,13 +9,24 @@
 	const mySeat = $derived(store.mySeat);
 	const myTeam = $derived(mySeat != null ? teamOf(mySeat) : 0);
 	const running = $derived(doc?.score.running ?? [0, 0]);
-	const usLabel = $derived(mySeat != null ? 'You' : 'Team 0');
-	const themLabel = $derived(mySeat != null ? 'Them' : 'Team 1');
+	// "We" / "They" are relative to the local player's team; a spectator has no
+	// side, so they see neutral team labels.
+	const usLabel = $derived(mySeat != null ? 'We' : 'Team 1');
+	const themLabel = $derived(mySeat != null ? 'They' : 'Team 2');
 	const us = $derived(running[myTeam]);
 	const them = $derived(running[myTeam ^ 1]);
 
 	const last = $derived(doc?.score.hands.at(-1));
 	const showModal = $derived(doc?.phase === 'handScored' && last != null);
+	const makerLabel = $derived(
+		mySeat == null
+			? last?.maker === 0
+				? 'Team 1'
+				: 'Team 2'
+			: last?.maker === myTeam
+				? 'We'
+				: 'They'
+	);
 </script>
 
 <div class="rounded-xl bg-green-950/80 px-3 py-2 text-sm ring-1 ring-white/10">
@@ -26,7 +37,6 @@
 </div>
 
 {#if showModal && last}
-	{@const mk = last.maker === myTeam}
 	<div class="fixed inset-0 z-30 grid place-items-center bg-black/50 p-4">
 		<div class="w-full max-w-sm rounded-2xl bg-green-950 p-6 text-white ring-1 ring-white/15">
 			<h2 class="mb-1 text-lg font-bold">{last.renege ? 'Renege!' : 'Hand scored'}</h2>
@@ -34,9 +44,7 @@
 				{#if last.renege}
 					A player reneged — the other team takes 162 plus their meld.
 				{:else}
-					{mk ? 'Your team' : 'The other team'} made {SUIT_NAME[last.trump]}{last.set
-						? ' — and went set.'
-						: '.'}
+					{makerLabel} made {SUIT_NAME[last.trump]}{last.set ? ' — and went set.' : '.'}
 				{/if}
 			</p>
 

@@ -31,17 +31,17 @@ describe('GameOver.svelte', () => {
 
 	it('celebrates when your team won', async () => {
 		render(GameOver, { store: fakeStore({ winner: 0, mySeat: 0 }) });
-		await expect.element(page.getByText('Your team wins!')).toBeInTheDocument();
+		await expect.element(page.getByText('We won!')).toBeInTheDocument();
 	});
 
 	it('commiserates when your team lost', async () => {
 		render(GameOver, { store: fakeStore({ winner: 1, mySeat: 0 }) });
-		await expect.element(page.getByText('Your team lost')).toBeInTheDocument();
+		await expect.element(page.getByText('We lost')).toBeInTheDocument();
 	});
 
 	it('names the winning team for a spectator', async () => {
 		render(GameOver, { store: fakeStore({ winner: 1, mySeat: null }) });
-		await expect.element(page.getByText('Team 1 wins')).toBeInTheDocument();
+		await expect.element(page.getByText('Team 2 wins')).toBeInTheDocument();
 	});
 
 	it('Play again resets to the lobby', async () => {
