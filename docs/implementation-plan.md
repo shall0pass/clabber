@@ -73,22 +73,25 @@ own the ~40 lines instead.
 ### 3.2 The secret code ↔ document mapping
 
 Automerge document IDs are random, not chosen. To let a human type a short
-friendly code we keep a **directory document** at a well‑known, hard‑coded
-Automerge URL (committed as a constant, created once with a one‑off script):
+friendly code, the sync server keeps a tiny registry (`games.json`) mapping
+`CODE → automerge url`, exposed over HTTP:
 
 ```
-directory doc:  { games: { [CODE: string]: AutomergeUrl } }
+GET  /games/:CODE        -> 200 { code, url, createdAt } | 404
+PUT  /games/:CODE { url } -> 201 created | 200 already yours | 409 taken
 ```
 
-- **Create game:** generate a code (e.g. 4 words / 6 chars, `nanoid`‑style,
-  ambiguity‑free alphabet), `repo.create()` a fresh game doc, write
-  `directory.games[CODE] = handle.url`.
-- **Join game:** look up `directory.games[CODE]`; if present,
-  `repo.find(url)`; if absent, show "no game with that code".
-- Codes are case‑insensitive, normalised on input. Collisions: regenerate on
-  create if the key already exists.
+- **Create game:** `repo.create()` a fresh game doc, then
+  `PUT /games/:CODE { url: handle.url }` with a freshly generated 5-char code
+  (alphabet without `0 O 1 I L`); regenerate on the rare 409.
+- **Join game:** `GET /games/:CODE`; on 200 `repo.find(url)`, on 404 show "no
+  game with that code". Codes are upper-cased / whitespace-stripped on input.
 
-This keeps one shared relay serving many concurrent games with no server code.
+> This is a small deviation from the original "directory document at a
+> well-known Automerge URL" plan: that URL has to be minted once and then live
+> forever on the relay, which is awkward to bootstrap and fragile if the
+> relay's storage is ever cleared. A JSON key-value map on the server we
+> already run is simpler and still carries **no Clabber logic**.
 
 ### 3.3 Who runs the bots — host election
 
@@ -429,7 +432,7 @@ Each phase ends green (`npm run lint`, `npm test`, app builds).
 - [x] Ordering resolved by rendering the sheet (Playwright screenshot), not a
       slicing script. `artifacts/PlayingCards.svg` is a 13×4 grid, cell 64×89:
       columns `A 2 3 4 5 6 7 8 9 10 J Q K`, rows `Clubs, Hearts, Spades,
-    Diamonds`. Copied whole to `static/cards/faces.svg` (1.6 MB / ~0.5 MB
+Diamonds`. Copied whole to `static/cards/faces.svg` (1.6 MB / ~0.5 MB
       gzip) — no per-card slicing; cards are drawn as a CSS background sprite.
 - [x] `artifacts/CardBackscomplete.svg` (~7 MB) dropped as too heavy; replaced
       with a hand-drawn `static/cards/back.svg` (~700 B) at the same aspect.
@@ -479,13 +482,41 @@ one compat test):
       and two peers converge, de-risking Phase 3.
 - [x] Green: `npm run lint`, `npm run check`, `npm test` (71), `npm run build`.
 
-### Phase 3 — Networking & lobby
+### Phase 3 — Networking & lobby — ✅ done
 
-- `repo.ts`, `directory.ts`, `create-directory-doc.mjs` (mint + commit the URL).
-- `gameStore.svelte.ts`, `presence.ts`.
-- `JoinScreen` (join + create), `Lobby` + `SeatPicker`: sit/stand, rename with
-  pencil, team choice, bot‑fill toggle with robot icon + funny names.
-- Two‑machine manual test: code round‑trips, seating converges.
+- [x] **Join codes via a sync-server registry, not a directory doc.** The
+      well-known-Automerge-URL approach was too fragile to bootstrap (mint
+      once, must persist forever). Instead the sync server keeps a tiny
+      `code → automerge url` map in `games.json` and exposes
+      `GET /games/:code` and `PUT /games/:code {url}` (201 / 200 / 409), with
+      CORS. Still no Clabber logic on the server.
+- [x] `src/lib/repo/repo.ts` — one `Repo` per tab (`WebSocketClientAdapter` +
+      `IndexedDBStorageAdapter`), `SYNC_HTTP` derived from `PUBLIC_SYNC_URL`.
+- [x] `src/lib/repo/directory.ts` — `makeCode` (5 chars, no `0/O/1/I/L`),
+      `normaliseCode`, `resolveCode`, `claimCode`.
+- [x] `src/lib/repo/gameStore.svelte.ts` — `GameStore` runes wrapper
+      (`doc` `$state`, `change(action)`, `mySeat`), `createNewGame()` /
+      `joinExistingGame(code)`, per-tab `getClientId()` in `sessionStorage`.
+- [x] `src/lib/repo/presence.svelte.ts` — heartbeats over Automerge
+      **ephemeral messages** (not doc history); answers a newcomer immediately
+      so presence converges in one round trip.
+- [x] `src/lib/clabber/botNames.ts` — funny names + `pickBotNames(n, taken)`.
+- [x] Components: `JoinScreen.svelte` (code input + "Start a new game"),
+      `Seat.svelte` (name, online dot, robot icon for bots, pencil rename,
+      sit/move/stand/remove), `Lobby.svelte` (round felt table, seats rotated
+      so you sit at the bottom, partner highlighted, "Fill empty seats with
+      computers", "Deal"). `+page.svelte` is the phase switch: no game →
+      JoinScreen; `lobby` → Lobby; else a placeholder until Phase 5. The code
+      lives in the URL fragment so a reload rejoins.
+- [x] `optimizeDeps`: pre-bundle `@automerge/automerge-repo` + adapters (CJS
+      interop for `eventemitter3` etc. in the browser + browser test runner);
+      keep only `@automerge/automerge` (wasm) excluded.
+- [x] Tests: `directory.spec.ts`, `botNames.spec.ts` (node),
+      `gameStore.svelte.spec.ts` (chromium). 83 tests total.
+- [x] Automated 2-tab Playwright E2E (create → join by code → seat →
+      cross-tab convergence of seating and rename → fill bots → deal → both
+      tabs advance → reload rejoins via `#code`), and presence dots go green
+      both ways.
 
 ### Phase 4 — Host & bots
 

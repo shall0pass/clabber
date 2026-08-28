@@ -12,4 +12,5 @@ export * from './score';
 export * from './actions';
 export * from './reducer';
 export * from './bot';
+export * from './botNames';
 export * from './simulate';

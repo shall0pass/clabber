@@ -31,9 +31,17 @@ export default defineConfig({
 			}
 		})
 	],
-	// Automerge's wasm module does not play well with Vite's dep pre-bundling.
 	optimizeDeps: {
-		exclude: ['@automerge/automerge', '@automerge/automerge-repo']
+		// Keep the wasm core external — Vite's pre-bundler can't handle it — but
+		// DO pre-bundle automerge-repo and its adapters so their CommonJS deps
+		// (eventemitter3, cbor-x, …) get proper ESM interop in the browser and
+		// in the browser test runner.
+		exclude: ['@automerge/automerge'],
+		include: [
+			'@automerge/automerge-repo',
+			'@automerge/automerge-repo-network-websocket',
+			'@automerge/automerge-repo-storage-indexeddb'
+		]
 	},
 	test: {
 		expect: { requireAssertions: true },
