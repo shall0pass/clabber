@@ -56,7 +56,27 @@ export function reduce(doc: GameDoc, action: Action): void {
 		}
 		case 'ResetToLobby':
 			return resetToLobby(doc);
+		case 'SendChat':
+			return sendChat(doc, action);
 	}
+}
+
+/** Newest-first cap so the chat can't grow the document without bound. */
+const CHAT_LIMIT = 100;
+
+function sendChat(doc: GameDoc, a: Extract<Action, { type: 'SendChat' }>): void {
+	const text = a.text.trim().slice(0, 500);
+	if (!text) return;
+	if (!doc.chat) doc.chat = [];
+	doc.chat.push({
+		id: a.id,
+		from: a.from,
+		name: a.name.trim().slice(0, 40) || 'Player',
+		seat: a.seat,
+		text,
+		ts: a.ts
+	});
+	if (doc.chat.length > CHAT_LIMIT) doc.chat.splice(0, doc.chat.length - CHAT_LIMIT);
 }
 
 function resetToLobby(doc: GameDoc): void {

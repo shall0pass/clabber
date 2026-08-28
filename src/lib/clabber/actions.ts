@@ -28,6 +28,17 @@ export type Action =
 	 *  they drop out. Keeps the name and `actorId` so they resume on return. */
 	| { type: 'CoverSeat'; seat: Seat; isBot: boolean }
 	/** After a game ends: back to the lobby, keeping seats, names and the code. */
-	| { type: 'ResetToLobby' };
+	| { type: 'ResetToLobby' }
+	/** Post a message to the table chat. `id` / `ts` are supplied by the caller
+	 *  so the reducer stays pure. */
+	| {
+			type: 'SendChat';
+			id: string;
+			from: string;
+			name: string;
+			seat: Seat | null;
+			text: string;
+			ts: number;
+	  };
 
 export type ActionType = Action['type'];

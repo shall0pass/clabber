@@ -719,7 +719,12 @@ with `wrangler pages dev` against the real public relay.
 
 ## 13. Out of scope for v1
 
-Spectators, chat, reconnect to a _finished_ game's history browser, accounts,
+Spectators, reconnect to a _finished_ game's history browser, accounts,
 matchmaking/lobby list, mobile app packaging, sound effects, calling a renege
 on _another_ player (self-renege via Advanced mode is built),
 tournament/round‑robin scoring.
+
+Table chat _is_ built: `doc.chat` (a `ChatMessage[]` capped at the most recent
+100, appended via the `SendChat` action), rendered by `ChatBox.svelte` — a
+fixed bottom-right panel present in both the lobby and the game, with an unread
+badge and names tinted by the reader's own side.

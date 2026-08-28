@@ -120,6 +120,42 @@ describe('ResetToLobby', () => {
 	});
 });
 
+describe('SendChat', () => {
+	function chat(doc: GameDoc, text: string) {
+		reduce(doc, {
+			type: 'SendChat',
+			id: crypto.randomUUID(),
+			from: 'c1',
+			name: 'Ada',
+			seat: 0,
+			text,
+			ts: Date.now()
+		});
+	}
+
+	it('appends a message', () => {
+		const doc = createGame('T', 0);
+		chat(doc, 'hello all');
+		expect(doc.chat).toHaveLength(1);
+		expect(doc.chat[0]).toMatchObject({ from: 'c1', name: 'Ada', seat: 0, text: 'hello all' });
+	});
+
+	it('ignores blank / whitespace-only messages and trims', () => {
+		const doc = createGame('T', 0);
+		chat(doc, '   ');
+		chat(doc, '  hi  ');
+		expect(doc.chat.map((m) => m.text)).toEqual(['hi']);
+	});
+
+	it('keeps only the most recent 100 messages', () => {
+		const doc = createGame('T', 0);
+		for (let i = 0; i < 130; i++) chat(doc, `m${i}`);
+		expect(doc.chat).toHaveLength(100);
+		expect(doc.chat[0].text).toBe('m30');
+		expect(doc.chat.at(-1)?.text).toBe('m129');
+	});
+});
+
 describe('SetAdvanced', () => {
 	it('toggles the flag in the lobby', () => {
 		const doc = createGame('T', 0);

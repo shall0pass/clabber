@@ -85,6 +85,19 @@ export interface MeldState {
 	points: [number, number];
 }
 
+export interface ChatMessage {
+	id: string;
+	/** clientId (per-tab identity) of the sender. */
+	from: string;
+	/** display name at the time the message was sent. */
+	name: string;
+	/** seat 0..3 of the sender, or `null` for a spectator. */
+	seat: Seat | null;
+	text: string;
+	/** epoch ms. */
+	ts: number;
+}
+
 export interface HandResult {
 	dealer: Seat;
 	trump: Suit;
@@ -142,4 +155,7 @@ export interface GameDoc {
 
 	winner: TeamId | null;
 	log: string[];
+
+	/** Table chat, oldest first. Capped to the most recent messages. */
+	chat: ChatMessage[];
 }

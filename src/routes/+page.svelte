@@ -4,6 +4,7 @@
 	import JoinScreen from '$lib/components/JoinScreen.svelte';
 	import Lobby from '$lib/components/Lobby.svelte';
 	import Table from '$lib/components/Table.svelte';
+	import ChatBox from '$lib/components/ChatBox.svelte';
 	import { GameStore, joinExistingGame } from '$lib/repo/gameStore.svelte';
 	import { Presence } from '$lib/repo/presence.svelte';
 	import { Host } from '$lib/repo/host';
@@ -98,6 +99,7 @@
 	{:else}
 		<Table {store} {presence} {host} />
 	{/if}
+	<ChatBox {store} />
 {:else}
 	<JoinScreen onjoined={attach} />
 	{#if bootError}
