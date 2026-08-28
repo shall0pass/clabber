@@ -73,25 +73,38 @@ own the ~40 lines instead.
 ### 3.2 The secret code ↔ document mapping
 
 Automerge document IDs are random, not chosen. To let a human type a short
-friendly code, the sync server keeps a tiny registry (`games.json`) mapping
-`CODE → automerge url`, exposed over HTTP:
+friendly code, a tiny **same-origin** registry maps `CODE → automerge url`:
 
 ```
 GET  /games/:CODE        -> 200 { code, url, createdAt } | 404
 PUT  /games/:CODE { url } -> 201 created | 200 already yours | 409 taken
 ```
 
-- **Create game:** `repo.create()` a fresh game doc, then
-  `PUT /games/:CODE { url: handle.url }` with a freshly generated 5-char code
-  (alphabet without `0 O 1 I L`); regenerate on the rare 409.
-- **Join game:** `GET /games/:CODE`; on 200 `repo.find(url)`, on 404 show "no
-  game with that code". Codes are upper-cased / whitespace-stripped on input.
+- **Create game:** `repo.create()` a fresh doc, then
+  `PUT /games/:CODE { url }` with a generated 5-char code (alphabet without
+  `0 O 1 I L`); regenerate on the rare 409. If no registry answers, fall back
+  to using the document id as the shareable identifier (invite link).
+- **Join game:** a pasted `automerge:` url / bare doc id is used directly
+  (`asDocumentUrl`); otherwise `GET /games/:CODE`, `repo.find(url)` on 200, "no
+  game with that code" on 404. Codes are upper-cased / whitespace-stripped.
 
-> This is a small deviation from the original "directory document at a
-> well-known Automerge URL" plan: that URL has to be minted once and then live
-> forever on the relay, which is awkward to bootstrap and fragile if the
-> relay's storage is ever cleared. A JSON key-value map on the server we
-> already run is simpler and still carries **no Clabber logic**.
+**Who serves `/games/:CODE`** (the client always calls it same-origin):
+
+| Environment         | Registry                                                         |
+| ------------------- | ---------------------------------------------------------------- |
+| local `npm run dev` | Vite `server.proxy` → `PUBLIC_SYNC_URL`'s host (the sync server) |
+| Docker              | nginx `location /games/` → the `sync-server` container           |
+| Cloudflare Pages    | `functions/games/[code].js`, backed by a `GAMES` KV namespace    |
+
+The sync server (`sync-server/server.mjs`) still serves the registry itself
+from a `games.json` file for the first two. All three carry **no Clabber
+logic**.
+
+> This dropped the original "directory document at a well-known Automerge URL"
+> plan — that URL must be minted once and then persist forever on the relay,
+> which is fragile to bootstrap. A same-origin key-value lookup, served by
+> whatever infrastructure the deployment already has, is simpler. See
+> `docs/deploy-cloudflare.md`.
 
 ### 3.3 Who runs the bots — host election
 
@@ -613,6 +626,16 @@ time; override it for a real deployment with
 `CLABBER_SYNC_URL=wss://sync.example.com docker compose up --build` (a
 compose‑only variable, kept distinct from the `PUBLIC_SYNC_URL` in the local
 dev `.env`). `.dockerignore` keeps the local `.env` out of the image build.
+`docker/nginx.conf` also proxies `/games/` to the `sync` container so the
+join‑code registry is same‑origin.
+
+**Cloudflare Pages (available now).** `docs/deploy-cloudflare.md` is the guide.
+Static build + the public `wss://sync.automerge.org` relay + a same‑origin
+join‑code registry as a Pages Function (`functions/games/[code].js` + a `GAMES`
+KV namespace). `static/_redirects` gives SPA routing; `wrangler` is a dev
+dependency with `npm run pages:dev` / `pages:deploy`. Without the KV binding
+the app still works — games are shared by invite link. Verified end‑to‑end
+with `wrangler pages dev` against the real public relay.
 
 ---
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { claimCode, makeCode, normaliseCode, resolveCode } from './directory';
+import { asDocumentUrl, claimCode, makeCode, normaliseCode, resolveCode } from './directory';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -21,6 +21,21 @@ describe('makeCode / normaliseCode', () => {
 	});
 });
 
+describe('asDocumentUrl', () => {
+	const id = '3m1wsWZhNWrcCaHoHdqZAL8Egmuy';
+
+	it('recognises a bare id and an automerge: url', () => {
+		expect(asDocumentUrl(id)).toBe(`automerge:${id}`);
+		expect(asDocumentUrl(`automerge:${id}`)).toBe(`automerge:${id}`);
+		expect(asDocumentUrl(`  automerge:${id} `)).toBe(`automerge:${id}`);
+	});
+
+	it('rejects a short join code', () => {
+		expect(asDocumentUrl('ABCDE')).toBeNull();
+		expect(asDocumentUrl('7K2QX')).toBeNull();
+	});
+});
+
 describe('resolveCode', () => {
 	it('returns the url when the code is registered', async () => {
 		respond(200, { code: 'ABCDE', url: 'automerge:xyz', createdAt: 1 });
@@ -30,6 +45,14 @@ describe('resolveCode', () => {
 	it('returns null for an unknown code', async () => {
 		respond(404, { error: 'no such game' });
 		expect(await resolveCode('ZZZZZ')).toBeNull();
+	});
+
+	it('resolves a pasted document url without touching the registry', async () => {
+		const spy = vi.fn();
+		vi.stubGlobal('fetch', spy);
+		const id = '3m1wsWZhNWrcCaHoHdqZAL8Egmuy';
+		expect(await resolveCode(`automerge:${id}`)).toBe(`automerge:${id}`);
+		expect(spy).not.toHaveBeenCalled();
 	});
 });
 

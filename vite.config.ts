@@ -1,11 +1,22 @@
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
+import { loadEnv } from 'vite';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import wasm from 'vite-plugin-wasm';
 
+// In dev, the join-code registry (`/games/:code`) is served by the sync server;
+// in production it's a same-origin Cloudflare Pages Function. Proxy it to the
+// sync server's HTTP origin, derived from PUBLIC_SYNC_URL.
+const syncUrl =
+	loadEnv('development', process.cwd(), 'PUBLIC_').PUBLIC_SYNC_URL ?? 'ws://localhost:3030';
+const registryTarget = syncUrl.replace(/^ws(s?):\/\//, 'http$1://').replace(/\/+$/, '');
+
 export default defineConfig({
+	server: {
+		proxy: { '/games': { target: registryTarget, changeOrigin: true } }
+	},
 	plugins: [
 		tailwindcss(),
 		// Automerge ships its core as WebAssembly; this lets Vite load it in the

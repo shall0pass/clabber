@@ -87,13 +87,22 @@
 <div class="flex min-h-screen flex-col items-center gap-6 bg-green-900 p-6 text-white">
 	<header class="flex flex-col items-center gap-1">
 		<h1 class="text-xl font-bold tracking-wide">Clabber lobby</h1>
-		<button
-			onclick={copyLink}
-			class="rounded-lg bg-green-950/60 px-3 py-1.5 font-mono text-lg tracking-[0.35em] ring-1 ring-white/10 hover:ring-green-400"
-			title="Copy invite link"
-		>
-			{store.code || '·····'}
-		</button>
+		{#if store.code && store.code.length <= 8}
+			<button
+				onclick={copyLink}
+				class="rounded-lg bg-green-950/60 px-3 py-1.5 font-mono text-lg tracking-[0.35em] ring-1 ring-white/10 hover:ring-green-400"
+				title="Copy invite link"
+			>
+				{store.code}
+			</button>
+		{:else}
+			<button
+				onclick={copyLink}
+				class="rounded-lg bg-green-950/60 px-3 py-1.5 text-sm ring-1 ring-white/10 hover:ring-green-400"
+			>
+				📋 Copy invite link
+			</button>
+		{/if}
 		<span class="h-4 text-xs text-green-300">{copied ? 'link copied!' : ''}</span>
 	</header>
 

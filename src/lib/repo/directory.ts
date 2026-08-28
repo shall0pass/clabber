@@ -1,11 +1,22 @@
-// Join codes. A short human-friendly code maps to an `automerge:` document url
-// via the sync server's tiny registry (see sync-server/server.mjs).
+// Join codes.
+//
+// A short, human-friendly code maps to an `automerge:` document url through a
+// tiny same-origin registry: `GET /games/:code` → { url }, `PUT /games/:code`
+// → claim it.
+//
+// Who serves `/games/:code`:
+//   - local dev : Vite proxies it to PUBLIC_SYNC_URL's host (the sync server)
+//   - docker    : nginx proxies it to the sync-server container
+//   - Cloudflare: the Pages Function in functions/games/[code].js (+ KV)
+//
+// A pasted document url / id is resolved directly, so an invite link works
+// even when no registry is reachable (e.g. Cloudflare without the KV binding).
 
-import { SYNC_HTTP } from './repo';
-
-// No 0/O/1/I/L — unambiguous when read aloud or typed.
-const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'; // no 0/O/1/I/L
 const CODE_LEN = 5;
+// Automerge document ids are base58 and 20+ chars long — a 5-char join code
+// can never look like one.
+const DOC_ID_RE = /^(?:automerge:)?([1-9A-HJ-NP-Za-km-z]{20,})$/;
 
 export function makeCode(): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(CODE_LEN));
@@ -16,18 +27,27 @@ export function normaliseCode(input: string): string {
 	return input.trim().toUpperCase().replace(/\s+/g, '');
 }
 
-/** The document url for a code, or `null` if no game has claimed it. */
-export async function resolveCode(code: string): Promise<string | null> {
-	const res = await fetch(`${SYNC_HTTP}/games/${encodeURIComponent(normaliseCode(code))}`);
+/** If `input` is an automerge document url or bare id, its normalised
+ *  `automerge:…` url; otherwise `null`. */
+export function asDocumentUrl(input: string): string | null {
+	const m = input.trim().match(DOC_ID_RE);
+	return m ? `automerge:${m[1]}` : null;
+}
+
+/** The document url for a code (or a pasted url / id), or `null` if unknown. */
+export async function resolveCode(codeOrUrl: string): Promise<string | null> {
+	const direct = asDocumentUrl(codeOrUrl);
+	if (direct) return direct;
+	const res = await fetch(`/games/${encodeURIComponent(normaliseCode(codeOrUrl))}`);
 	if (res.status === 404) return null;
 	if (!res.ok) throw new Error(`could not look up code (${res.status})`);
 	return (await res.json()).url as string;
 }
 
-/** Claim `code` for `url`. Returns false if the code is already taken by a
- *  different game. */
+/** Claim `code` for `url`. `false` if it is already taken by a different game;
+ *  throws if the registry is unreachable. */
 export async function claimCode(code: string, url: string): Promise<boolean> {
-	const res = await fetch(`${SYNC_HTTP}/games/${encodeURIComponent(normaliseCode(code))}`, {
+	const res = await fetch(`/games/${encodeURIComponent(normaliseCode(code))}`, {
 		method: 'PUT',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({ url })

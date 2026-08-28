@@ -18,6 +18,3 @@ export function getRepo(): RepoType {
 	}
 	return repo;
 }
-
-/** The sync server's HTTP origin (for the join-code registry). */
-export const SYNC_HTTP = PUBLIC_SYNC_URL.replace(/^ws(s?):\/\//, 'http$1://').replace(/\/+$/, '');

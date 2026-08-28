@@ -80,21 +80,31 @@ export class GameStore {
 
 type Init = Parameters<ReturnType<typeof getRepo>['create']>[0];
 
-/** Create a brand-new game and register a fresh join code for it. */
+/** Create a brand-new game. Registers a short join code if a registry is
+ *  reachable; otherwise the shareable identifier is the document id and the
+ *  game is joined by invite link. */
 export async function createNewGame(): Promise<GameStore> {
 	const repo = getRepo();
-	let code = makeCode();
-	const handle = repo.create(createGame(code) as Init) as DocHandle<GameDoc>;
+	const handle = repo.create(createGame(makeCode()) as Init) as DocHandle<GameDoc>;
 	await handle.whenReady();
 
 	for (let attempt = 0; attempt < 6; attempt++) {
-		if (await claimCode(code, handle.url)) {
-			if (handle.doc()?.code !== code) handle.change((d) => (d.code = code));
+		const code = makeCode();
+		let claimed: boolean;
+		try {
+			claimed = await claimCode(code, handle.url);
+		} catch {
+			break; // no reachable registry — fall back to the document id
+		}
+		if (claimed) {
+			handle.change((d) => (d.code = code));
 			return new GameStore(handle);
 		}
-		code = makeCode(); // astronomically rare collision
+		// otherwise: astronomically rare collision, try another code
 	}
-	throw new Error('could not allocate a unique game code');
+
+	handle.change((d) => (d.code = handle.url.replace(/^automerge:/, '')));
+	return new GameStore(handle);
 }
 
 /** Join the game a code points at, or `null` if the code is unknown. */
