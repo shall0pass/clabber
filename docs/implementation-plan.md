@@ -9,11 +9,11 @@ static site.
 
 ## 1. Decisions locked in
 
-| Area | Decision | Consequence |
-| --- | --- | --- |
-| Sync transport | **Self‑hosted Automerge sync server** (small Node/`ws` service in this repo) | We run one tiny always‑on process; no dependency on the public demo relay. |
+| Area               | Decision                                                                                                    | Consequence                                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sync transport     | **Self‑hosted Automerge sync server** (small Node/`ws` service in this repo)                                | We run one tiny always‑on process; no dependency on the public demo relay.                                                                       |
 | Hidden information | **Trust‑based** — every hand is stored in the doc in plaintext; the UI only renders the local player's hand | Simple and fully CRDT‑native. A determined player could read another hand out of the raw doc. Acceptable for a friendly game; documented in‑app. |
-| Front‑end deploy | **Static site** (`@sveltejs/adapter-static`, SPA mode) hosted on any CDN/Pages | No SvelteKit server. The sync server is deployed separately as its own service. The app is handed the sync server URL via a build‑time env var. |
+| Front‑end deploy   | **Static site** (`@sveltejs/adapter-static`, SPA mode) hosted on any CDN/Pages                              | No SvelteKit server. The sync server is deployed separately as its own service. The app is handed the sync server URL via a build‑time env var.  |
 
 These three combine cleanly: a static SPA that opens a WebSocket to our own
 sync server and keeps a local IndexedDB copy for reconnects.
@@ -27,21 +27,28 @@ TypeScript, Vitest (browser + node projects), Prettier/ESLint. Drizzle +
 `better-sqlite3` are scaffolded but unused by this design — leave them for now,
 remove in a later cleanup.
 
-**To add:**
+**Added in Phase 0** (exact versions pinned):
 
-| Package | Purpose |
-| --- | --- |
-| `@automerge/automerge` | CRDT core (wasm) |
-| `@automerge/automerge-repo` | Document repo, sync, `DocHandle` |
-| `@automerge/automerge-repo-network-websocket` | Browser ↔ sync‑server transport |
-| `@automerge/automerge-repo-storage-indexeddb` | Local persistence / offline reconnect |
-| `@automerge/vite-plugin` (or `vite-plugin-wasm` + `vite-plugin-top-level-await`) | Load the Automerge wasm in Vite |
-| `@sveltejs/adapter-static` | Static SPA build (replaces `adapter-auto`) |
-| `canvas-confetti` | Winner fireworks |
-| `ws` | Sync‑server WebSocket (server package only) |
+| Package                                       | Version | Purpose                                    |
+| --------------------------------------------- | ------- | ------------------------------------------ |
+| `@automerge/automerge`                        | 3.4.1   | CRDT core (wasm)                           |
+| `@automerge/automerge-repo`                   | 2.5.6   | Document repo, sync, `DocHandle`           |
+| `@automerge/automerge-repo-network-websocket` | 2.5.6   | Browser ↔ sync‑server transport            |
+| `@automerge/automerge-repo-storage-indexeddb` | 2.5.6   | Local persistence / offline reconnect      |
+| `vite-plugin-wasm`                            | 3.6.0   | Load the Automerge wasm in the Vite bundle |
+| `@sveltejs/adapter-static`                    | 3.0.10  | Static SPA build (replaces `adapter-auto`) |
+| `canvas-confetti` / `@types/canvas-confetti`  | 1.9.4   | Winner fireworks                           |
 
-Sync server: use `@automerge/automerge-repo-sync-server` if it fits, otherwise a
-~40‑line wrapper around `Repo` + `NodeWSServerAdapter` + filesystem storage.
+> `vite-plugin-top-level-await` is **not** needed: Vite 8 uses rolldown, which
+> emits the top‑level await in Automerge's ESM entry natively (and the plugin's
+> hard dependency on `rollup` breaks the build). `@automerge/vite-plugin` does
+> not exist on npm.
+
+Sync server (`sync-server/`, its own `package.json`): a ~40‑line wrapper around
+`Repo` + `NodeWSServerAdapter` (`@automerge/automerge-repo-network-websocket`) +
+`NodeFSStorageAdapter` (`@automerge/automerge-repo-storage-nodefs`) + `ws`. The
+published `@automerge/automerge-repo-sync-server` package is stale (0.2.8), so we
+own the ~40 lines instead.
 
 ---
 
@@ -116,89 +123,95 @@ One document per game. All fields are plain JSON (Automerge‑friendly). Cards a
 strings: `"AS" "TS" "KH" "9C"` … (rank ∈ `A K Q J T 9`, suit ∈ `S H D C`).
 
 ```ts
-type Seat = 0 | 1 | 2 | 3;            // 0 bottom (local default), 1 left, 2 top(partner of 0), 3 right
-type TeamId = 0 | 1;                  // team 0 = seats 0 & 2, team 1 = seats 1 & 3
+type Seat = 0 | 1 | 2 | 3; // 0 bottom (local default), 1 left, 2 top(partner of 0), 3 right
+type TeamId = 0 | 1; // team 0 = seats 0 & 2, team 1 = seats 1 & 3
 
 interface PlayerSlot {
-  seat: Seat;
-  name: string;                       // editable, pencil icon
-  isBot: boolean;
-  botName?: string;                   // "Rainbow Goose", "Michael Jordan", …
-  connected: boolean;                 // derived from presence heartbeats
-  actorId?: string;                   // Automerge actor that "owns" this human seat
-  lastSeen: number;                   // epoch ms heartbeat
+	seat: Seat;
+	name: string; // editable, pencil icon
+	isBot: boolean;
+	botName?: string; // "Rainbow Goose", "Michael Jordan", …
+	connected: boolean; // derived from presence heartbeats
+	actorId?: string; // Automerge actor that "owns" this human seat
+	lastSeen: number; // epoch ms heartbeat
 }
 
 type Phase =
-  | 'lobby'
-  | 'dealing'
-  | 'bid1'        // round 1: play/pass the up-card suit
-  | 'bid2'        // round 2: choose any other suit, or pass
-  | 'redeal'      // all passed twice -> same dealer redeals
-  | 'meld'        // announcements owed on trick 1
-  | 'trick'       // normal trick play
-  | 'handScored'  // between hands, show breakdown
-  | 'gameOver';
+	| 'lobby'
+	| 'dealing'
+	| 'bid1' // round 1: play/pass the up-card suit
+	| 'bid2' // round 2: choose any other suit, or pass
+	| 'redeal' // all passed twice -> same dealer redeals
+	| 'meld' // announcements owed on trick 1
+	| 'trick' // normal trick play
+	| 'handScored' // between hands, show breakdown
+	| 'gameOver';
 
 interface GameDoc {
-  version: 1;
-  code: string;
-  createdAt: number;
-  hostActorId: string;
+	version: 1;
+	code: string;
+	createdAt: number;
+	hostActorId: string;
 
-  players: PlayerSlot[];              // length 4, one per seat
+	players: PlayerSlot[]; // length 4, one per seat
 
-  phase: Phase;
-  dealer: Seat;
-  rngSeed: string;                    // host sets per deal; deterministic shuffle for replay/tests
+	phase: Phase;
+	dealer: Seat;
+	rngSeed: string; // host sets per deal; deterministic shuffle for replay/tests
 
-  hands: Record<Seat, string[]>;      // full hands (trust-based)
-  upCard: string | null;             // dealer's turned-up 6th card during bidding
-  trump: 'S' | 'H' | 'D' | 'C' | null;
-  maker: TeamId | null;              // team that declared trump
+	hands: Record<Seat, string[]>; // full hands (trust-based)
+	upCard: string | null; // dealer's turned-up 6th card during bidding
+	trump: 'S' | 'H' | 'D' | 'C' | null;
+	maker: TeamId | null; // team that declared trump
 
-  bidding: {
-    round: 1 | 2;
-    turn: Seat;
-    passes: Seat[];                   // who has passed this round
-    passedSuit: 'S'|'H'|'D'|'C'|null; // suit forbidden in round 2
-  } | null;
+	bidding: {
+		round: 1 | 2;
+		turn: Seat;
+		passes: Seat[]; // who has passed this round
+		passedSuit: 'S' | 'H' | 'D' | 'C' | null; // suit forbidden in round 2
+	} | null;
 
-  trick: {
-    number: number;                   // 1..6
-    leader: Seat;
-    turn: Seat;
-    plays: { seat: Seat; card: string }[];
-  } | null;
+	trick: {
+		number: number; // 1..6
+		leader: Seat;
+		turn: Seat;
+		plays: { seat: Seat; card: string }[];
+	} | null;
 
-  tricksWon: Record<Seat, string[][]>; // cards collected, per seat (team totals derived)
-  lastTrickWinner: Seat | null;
+	tricksWon: Record<Seat, string[][]>; // cards collected, per seat (team totals derived)
+	lastTrickWinner: Seat | null;
 
-  melds: {
-    // announced on trick 1, shown before trick 2
-    declared: Record<Seat, MeldClaim[]>;
-    shown: Record<Seat, boolean>;
-    resolvedTeam: TeamId | null;      // team that scored meld this hand
-    bella: Record<Seat, boolean>;     // K+Q trump, always scores
-  };
+	melds: {
+		// announced on trick 1, shown before trick 2
+		declared: Record<Seat, MeldClaim[]>;
+		shown: Record<Seat, boolean>;
+		resolvedTeam: TeamId | null; // team that scored meld this hand
+		bella: Record<Seat, boolean>; // K+Q trump, always scores
+	};
 
-  score: {
-    running: Record<TeamId, number>;  // cumulative toward 500
-    hands: HandResult[];              // history for the scoreboard
-  };
+	score: {
+		running: Record<TeamId, number>; // cumulative toward 500
+		hands: HandResult[]; // history for the scoreboard
+	};
 
-  winner: TeamId | null;
+	winner: TeamId | null;
 
-  log: LogEntry[];                     // human-readable event feed (append-only)
+	log: LogEntry[]; // human-readable event feed (append-only)
 }
 
-interface MeldClaim { kind: 'dad'|'fifty'|'hundred'|'twohundred'|'bella'; cards: string[]; points: number; }
+interface MeldClaim {
+	kind: 'dad' | 'fifty' | 'hundred' | 'twohundred' | 'bella';
+	cards: string[];
+	points: number;
+}
 interface HandResult {
-  dealer: Seat; trump: string; maker: TeamId;
-  trickPoints: Record<TeamId, number>;
-  meldPoints: Record<TeamId, number>;
-  set: boolean;                       // maker went set
-  awarded: Record<TeamId, number>;
+	dealer: Seat;
+	trump: string;
+	maker: TeamId;
+	trickPoints: Record<TeamId, number>;
+	meldPoints: Record<TeamId, number>;
+	set: boolean; // maker went set
+	awarded: Record<TeamId, number>;
 }
 ```
 
@@ -212,16 +225,16 @@ it in‑doc and prune on the host.
 
 Fully unit‑tested pure functions. This is the heart of correctness.
 
-| Module | Responsibility |
-| --- | --- |
-| `cards.ts` | 24‑card deck, rank/suit parsing, non‑trump vs trump ordering, point values (Table in the rules). |
-| `deal.ts` | Seeded shuffle (`mulberry32`/`seedrandom`), deal 6 each clockwise, set up‑card. |
-| `bidding.ts` | `legalBids(doc)`, `applyBid(doc, seat, 'play'|'pass'|{suit})`, round‑1→round‑2→redeal transitions, "must hold ≥1 card of the suit" check, round‑2 forbidden‑suit check. |
-| `play.ts` | `legalMoves(doc, seat)` implementing: follow suit; if void, must trump; must overtrump the highest trump so far (even partner's) when able; else throw off. `applyPlay`, `resolveTrick` (highest trump, else highest of led suit), leader of next trick, last‑trick +10. |
-| `meld.ts` | Detect all melds in a hand (sequences ≥3 in a suit using `9 T J Q K A`; four‑of‑a‑kind; four jacks = 200; bella = K+Q trump). `compareMeld` for "highest meld wins team scoring", equal‑sequence rules (length, then top card, then trump beats non‑trump, else nobody), bella always scores, "dad 'a' belle" 40. |
-| `score.ts` | End‑of‑hand: trick points per team (+10 last trick, 162 total), add meld, apply **set** rule (maker must strictly out‑score opponents incl. meld or scores 0 and, if set, loses meld unless meld+tricks still outscores), write `HandResult`, update running score, detect ≥500 winner and tie‑break ("both ≥500 → higher total; tie over 500 → play another hand"). |
-| `reducer.ts` | `reduce(doc, action, ctx)` — the single entry point every client calls inside `handle.change(...)`. Validates the action against `phase`/`turn`, mutates the draft. All UI and bot code go through this. |
-| `actions.ts` | Action type union: `JoinSeat`, `LeaveSeat`, `RenameSeat`, `ToggleBotFill`, `StartHand`, `Bid`, `AnnounceMeld`, `ShowMeld`, `PlayCard`, `AdvanceAfterHand`, `Heartbeat`, `ClaimHost`. |
+| Module       | Responsibility                                                                                                                                                                                                                                                                                                                                                       |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cards.ts`   | 24‑card deck, rank/suit parsing, non‑trump vs trump ordering, point values (Table in the rules).                                                                                                                                                                                                                                                                     |
+| `deal.ts`    | Seeded shuffle (`mulberry32`/`seedrandom`), deal 6 each clockwise, set up‑card.                                                                                                                                                                                                                                                                                      |
+| `bidding.ts` | `legalBids(doc)`, `applyBid(doc, seat, 'play'                                                                                                                                                                                                                                                                                                                        | 'pass' | {suit})`, round‑1→round‑2→redeal transitions, "must hold ≥1 card of the suit" check, round‑2 forbidden‑suit check. |
+| `play.ts`    | `legalMoves(doc, seat)` implementing: follow suit; if void, must trump; must overtrump the highest trump so far (even partner's) when able; else throw off. `applyPlay`, `resolveTrick` (highest trump, else highest of led suit), leader of next trick, last‑trick +10.                                                                                             |
+| `meld.ts`    | Detect all melds in a hand (sequences ≥3 in a suit using `9 T J Q K A`; four‑of‑a‑kind; four jacks = 200; bella = K+Q trump). `compareMeld` for "highest meld wins team scoring", equal‑sequence rules (length, then top card, then trump beats non‑trump, else nobody), bella always scores, "dad 'a' belle" 40.                                                    |
+| `score.ts`   | End‑of‑hand: trick points per team (+10 last trick, 162 total), add meld, apply **set** rule (maker must strictly out‑score opponents incl. meld or scores 0 and, if set, loses meld unless meld+tricks still outscores), write `HandResult`, update running score, detect ≥500 winner and tie‑break ("both ≥500 → higher total; tie over 500 → play another hand"). |
+| `reducer.ts` | `reduce(doc, action, ctx)` — the single entry point every client calls inside `handle.change(...)`. Validates the action against `phase`/`turn`, mutates the draft. All UI and bot code go through this.                                                                                                                                                             |
+| `actions.ts` | Action type union: `JoinSeat`, `LeaveSeat`, `RenameSeat`, `ToggleBotFill`, `StartHand`, `Bid`, `AnnounceMeld`, `ShowMeld`, `PlayCard`, `AdvanceAfterHand`, `Heartbeat`, `ClaimHost`.                                                                                                                                                                                 |
 
 Renege handling: keep **light** — the engine simply never offers an illegal
 move in `legalMoves`, so honest clients and bots can't renege. A "call renege"
@@ -277,12 +290,14 @@ SPA: `src/routes/+layout.ts` sets `export const ssr = false; export const preren
 Single route `src/routes/+page.svelte` switches on `phase`.
 
 ### 8.1 Join screen (`JoinScreen.svelte`)
+
 - Big centred text input for the secret code + "Join".
 - "Start a new game" → creates doc, shows the generated code with a copy
   button, drops you into the lobby.
 - Small trust‑model note.
 
 ### 8.2 Lobby / seating (`Lobby.svelte`, `SeatPicker.svelte`)
+
 - Round green table rendered already (see 8.3) with the 4 seats.
 - Empty seat → "Sit here". Occupied seat → shows name + human/bot badge.
 - Choose **your team** by choosing a seat (0/2 vs 1/3); partner across the top
@@ -294,6 +309,7 @@ Single route `src/routes/+page.svelte` switches on `phase`.
 - "Deal" enabled once all 4 seats are filled (humans + bots) and ≥1 human.
 
 ### 8.3 Table (`Table.svelte`)
+
 - Round table, felt‑green, radial shading; the **local player always at the
   bottom**, partner top, opponents left/right. Seat→screen‑position map rotates
   the doc's fixed seats so "me" is seat‑bottom.
@@ -304,9 +320,10 @@ Single route `src/routes/+page.svelte` switches on `phase`.
 - Local hand: fanned, face‑up, sorted (trump grouped, then by rank). Playable
   cards lift on hover and are the only clickable ones (`legalMoves`); illegal
   cards dimmed. **One card at a time** is enforced by `phase==='trick' &&
-  trick.turn === mySeat`.
+trick.turn === mySeat`.
 
 ### 8.4 Bidding (`BiddingPanel.svelte`)
+
 - Round 1: up‑card shown by the dealer; on your turn, "Play (♦)" / "Pass".
 - Round 2: "Pass" plus one button per still‑legal suit (excludes the passed
   suit and suits you hold no card of).
@@ -314,6 +331,7 @@ Single route `src/routes/+page.svelte` switches on `phase`.
   happens; log feed on the side.
 
 ### 8.5 Meld (`MeldPanel.svelte`)
+
 - On trick 1, before your first card: checkboxes/auto‑detected list of your
   melds with points; "Announce" commits `declared`. Before trick 2 a "Show"
   button commits `shown`. Bella called out separately.
@@ -321,18 +339,21 @@ Single route `src/routes/+page.svelte` switches on `phase`.
   `compareMeld`.
 
 ### 8.6 Scoreboard (`Scoreboard.svelte`)
+
 - Persistent compact running score (Us vs Them) toward 500.
 - `phase==='handScored'` → modal with the full `HandResult` breakdown (trick
   pts, meld, set/no‑set, awarded) and a "Next hand" button (host auto‑advances
   after a timeout too).
 
 ### 8.7 End of game (`GameOver.svelte`)
+
 - `canvas-confetti` **fireworks** loop over the winning side of the table.
 - Losing side: "tears of sadness" — CSS animated 😢 / falling teardrop
   particles over the two losing seats, desaturated.
 - "Play again" resets to lobby keeping seats/names.
 
 ### 8.8 Shared state glue — `src/lib/repo/`
+
 - `repo.ts`: singleton `Repo` (WS + IndexedDB), `PUBLIC_SYNC_URL`.
 - `directory.ts`: get/create the directory doc, code↔url helpers.
 - `gameStore.svelte.ts`: Svelte 5 runes wrapper around a `DocHandle` —
@@ -379,20 +400,32 @@ docs/
 
 Each phase ends green (`npm run lint`, `npm test`, app builds).
 
-### Phase 0 — Project setup
-- `git init` (repo isn't initialised yet), initial commit of the scaffold.
-- Add deps (§2). Swap `adapter-auto` → `adapter-static`; SPA config in
-  `+layout.ts`. Wire the Automerge wasm Vite plugin.
-- `.env` / `.env.example`: `PUBLIC_SYNC_URL=ws://localhost:3030`.
-- `sync-server/` skeleton; `npm run sync` script; confirm two browser tabs sync
-  a throwaway counter doc.
+### Phase 0 — Project setup — ✅ done
+
+- [x] Repo already `git init`'d (`main`, "initial commit"). Working tree clean.
+- [x] Deps added and pinned (§2). Removed `adapter-auto`; `vite.config.ts` now
+      uses `adapter-static` with `fallback: 'index.html'` + `vite-plugin-wasm` + `optimizeDeps.exclude` for the Automerge packages.
+- [x] `src/routes/+layout.ts` → `ssr = false`, `prerender = false` (SPA).
+- [x] `.env` / `.env.example`: `PUBLIC_SYNC_URL=ws://localhost:3030`.
+- [x] `sync-server/` — own `package.json`, `server.mjs` (Repo + `NodeWSServerAdapter` + `NodeFSStorageAdapter`), `Dockerfile`, `README.md`. Root scripts
+      `sync`, `sync:dev`, `sync:install`.
+- [x] `scripts/smoke-sync.mjs` — two independent repos sync a counter doc
+      through the running server (passes).
+- [x] `src/lib/repo/wasm.svelte.spec.ts` — Automerge wasm creates/mutates/merges
+      docs in headless Chromium (client Vitest project, passes).
+- [x] Green gate: `npm run lint`, `npm run check`, `npm test`, `npm run build`
+      (emits `build/index.html`), `npm run dev` all pass.
+- Notes: `artifacts/`, `CLAUDE.md`, `sync-server/data/` added to
+  `.prettierignore` (vendored / runtime).
 
 ### Phase 1 — Card rendering
+
 - `scripts/slice-cards.mjs` + ordering probe; generate `src/lib/assets/cards/`.
 - `Card.svelte` (+ face‑down); a `/dev` gallery page (dev‑only) showing all 24 +
   back.
 
 ### Phase 2 — Rules engine (no UI)
+
 - `types.ts`, `cards.ts`, `deal.ts` with seeded shuffle + tests.
 - `bidding.ts`, `play.ts`, `meld.ts`, `score.ts`, `reducer.ts`, `actions.ts`.
 - Extensive `*.spec.ts`, including worked examples from the rules doc: 162‑point
@@ -403,6 +436,7 @@ Each phase ends green (`npm run lint`, `npm test`, app builds).
   reaches 500, no illegal move ever offered).
 
 ### Phase 3 — Networking & lobby
+
 - `repo.ts`, `directory.ts`, `create-directory-doc.mjs` (mint + commit the URL).
 - `gameStore.svelte.ts`, `presence.ts`.
 - `JoinScreen` (join + create), `Lobby` + `SeatPicker`: sit/stand, rename with
@@ -410,12 +444,14 @@ Each phase ends green (`npm run lint`, `npm test`, app builds).
 - Two‑machine manual test: code round‑trips, seating converges.
 
 ### Phase 4 — Host & bots
+
 - `host.ts`: election + heartbeat‑based takeover + reconciler with humanised
   delays. `bot.ts` + `botNames.ts`.
 - Test: 1 human + 3 bots plays a whole game unattended; drop/rejoin the human
   and a bot mid‑hand, host migrates, no double‑plays.
 
 ### Phase 5 — Table & play UI
+
 - `Table.svelte` seat rotation (me at bottom), `Seat.svelte`, opponent fans,
   dealer chip, turn/thinking indicators.
 - `BiddingPanel`, `MeldPanel`, in‑hand `legalMoves` gating (one card at a time),
@@ -423,10 +459,12 @@ Each phase ends green (`npm run lint`, `npm test`, app builds).
 - `Scoreboard` running + per‑hand modal; host auto‑advance.
 
 ### Phase 6 — Win / lose
+
 - `Fireworks.svelte` (canvas‑confetti) on the winners' half; `Tears.svelte`
   crying animation on the losers' half; desaturate losers. "Play again".
 
 ### Phase 7 — Polish & deploy
+
 - Reconnect/resume (IndexedDB), stale‑seat cleanup, empty‑seat → bot on
   disconnect (with a grace period), mobile/responsive table scaling,
   a11y (keyboard play, ARIA turn announcements), reduced‑motion fallback for
@@ -471,6 +509,6 @@ Each phase ends green (`npm run lint`, `npm test`, app builds).
 
 ## 13. Out of scope for v1
 
-Spectators, chat, reconnect to a *finished* game's history browser, accounts,
+Spectators, chat, reconnect to a _finished_ game's history browser, accounts,
 matchmaking/lobby list, mobile app packaging, sound effects, renege calls,
 tournament/round‑robin scoring.

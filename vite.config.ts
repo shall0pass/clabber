@@ -1,12 +1,17 @@
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import wasm from 'vite-plugin-wasm';
 
 export default defineConfig({
 	plugins: [
 		tailwindcss(),
+		// Automerge ships its core as WebAssembly; this lets Vite load it in the
+		// browser bundle and in the dev server. (Vite 8 / rolldown handles the
+		// top-level await in Automerge's ESM entry natively.)
+		wasm(),
 		sveltekit({
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
@@ -14,10 +19,10 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
-			// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
-			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
-			adapter: adapter(),
+			// The game is a fully client-side SPA (Automerge/wasm is browser-only),
+			// deployed as a static site. `fallback` makes every route serve the
+			// client shell so client-side routing takes over.
+			adapter: adapter({ fallback: 'index.html' }),
 
 			typescript: {
 				config: (config) => {
@@ -26,6 +31,10 @@ export default defineConfig({
 			}
 		})
 	],
+	// Automerge's wasm module does not play well with Vite's dep pre-bundling.
+	optimizeDeps: {
+		exclude: ['@automerge/automerge', '@automerge/automerge-repo']
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
