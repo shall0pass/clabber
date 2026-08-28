@@ -6,6 +6,7 @@
 		cards,
 		legal = [],
 		active = false,
+		advanced = false,
 		height = 118,
 		onplay
 	}: {
@@ -15,6 +16,8 @@
 		legal?: CardT[];
 		/** whether it is this player's turn to play a card */
 		active?: boolean;
+		/** Advanced mode: every card in hand is playable (an illegal one reneges) */
+		advanced?: boolean;
 		height?: number;
 		onplay?: (card: CardT) => void;
 	} = $props();
@@ -24,7 +27,10 @@
 	const step = $derived(width * 0.62);
 
 	function playable(c: CardT) {
-		return active && legalSet.has(c);
+		return active && (advanced || legalSet.has(c));
+	}
+	function reneging(c: CardT) {
+		return active && advanced && !legalSet.has(c);
 	}
 
 	// When it becomes this player's turn, move keyboard focus to the first
@@ -55,10 +61,11 @@
 				? 'cursor-pointer hover:-translate-y-4 focus-visible:-translate-y-4 focus-visible:ring-2 focus-visible:ring-amber-300'
 				: active
 					? 'cursor-not-allowed opacity-40'
-					: 'cursor-default'}"
+					: 'cursor-default'}
+				{reneging(card) ? 'ring-2 ring-red-500/70' : ''}"
 			style:left="{i * step}px"
 			disabled={!playable(card)}
-			aria-label={card}
+			aria-label={reneging(card) ? `${card} (renege)` : card}
 			onclick={() => onplay?.(card)}
 		>
 			<Card {card} {height} />

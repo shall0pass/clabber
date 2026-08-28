@@ -93,6 +93,8 @@ export interface HandResult {
 	meldPoints: [number, number];
 	/** The making team failed to out-score their opponents (they are "set"). */
 	set: boolean;
+	/** The hand ended on a renege — the opponents scored 162 + their meld. */
+	renege: boolean;
 	awarded: [number, number];
 	runningAfter: [number, number];
 }
@@ -125,6 +127,10 @@ export interface GameDoc {
 	lastTrickWinner: Seat | null;
 
 	melds: MeldState;
+
+	/** Set when a player played an illegal card in Advanced mode; the hand is
+	 *  then scored as a renege. */
+	renege: { seat: Seat; card: Card } | null;
 
 	score: {
 		running: [number, number];

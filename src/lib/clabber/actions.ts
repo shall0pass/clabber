@@ -12,7 +12,9 @@ export type Action =
 	| { type: 'StartHand'; seed: string }
 	| { type: 'Bid'; seat: Seat; bid: Bid }
 	| { type: 'AnnounceMeld'; seat: Seat }
-	| { type: 'PlayCard'; seat: Seat; card: Card }
+	/** `allowIllegal` (Advanced mode) lets the seat play a card that breaks the
+	 *  rules of following/trumping — that ends the hand as a renege. */
+	| { type: 'PlayCard'; seat: Seat; card: Card; allowIllegal?: boolean }
 	/** Collect a completed trick and move on (from phase `trickDone`). The host
 	 *  fires this after a short pause so every client sees all four cards. */
 	| { type: 'AdvanceTrick' }

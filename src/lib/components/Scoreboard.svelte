@@ -29,11 +29,15 @@
 	{@const mk = last.maker === myTeam}
 	<div class="fixed inset-0 z-30 grid place-items-center bg-black/50 p-4">
 		<div class="w-full max-w-sm rounded-2xl bg-green-950 p-6 text-white ring-1 ring-white/15">
-			<h2 class="mb-1 text-lg font-bold">Hand scored</h2>
+			<h2 class="mb-1 text-lg font-bold">{last.renege ? 'Renege!' : 'Hand scored'}</h2>
 			<p class="mb-4 text-sm text-white/60">
-				{mk ? 'Your team' : 'The other team'} made {SUIT_NAME[last.trump]}{last.set
-					? ' — and went set.'
-					: '.'}
+				{#if last.renege}
+					A player reneged — the other team takes 162 plus their meld.
+				{:else}
+					{mk ? 'Your team' : 'The other team'} made {SUIT_NAME[last.trump]}{last.set
+						? ' — and went set.'
+						: '.'}
+				{/if}
 			</p>
 
 			<table class="w-full text-sm">

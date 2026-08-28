@@ -70,8 +70,33 @@
 			teamOf(mySeat) !== doc.winner
 	);
 
+	// Advanced mode: play any card; an illegal one is a renege. Per-tab setting.
+	let advanced = $state(readAdvanced());
+	function readAdvanced() {
+		try {
+			return localStorage.getItem('clabber:advanced') === '1';
+		} catch {
+			return false;
+		}
+	}
+	function toggleAdvanced() {
+		advanced = !advanced;
+		try {
+			localStorage.setItem('clabber:advanced', advanced ? '1' : '0');
+		} catch {
+			/* ignore */
+		}
+	}
+
 	function play(card: CardT) {
-		if (mySeat != null) store.tryChange({ type: 'PlayCard', seat: mySeat, card });
+		if (mySeat == null) return;
+		const illegal = !myLegal.includes(card);
+		store.tryChange({
+			type: 'PlayCard',
+			seat: mySeat,
+			card,
+			...(illegal ? { allowIllegal: true } : {})
+		});
 	}
 	function nextHand() {
 		store.tryChange({ type: 'StartHand', seed: crypto.randomUUID() });
@@ -203,11 +228,36 @@
 
 		<div class="w-full">
 			{#if mySeat != null}
-				<MyHand cards={myHand} legal={myLegal} active={handActive} height={px(118)} onplay={play} />
+				{#if advanced && handActive}
+					<p class="pb-1 text-center text-xs text-red-300">
+						Advanced: any card is playable — an illegal one is a renege.
+					</p>
+				{/if}
+				<MyHand
+					cards={myHand}
+					legal={myLegal}
+					active={handActive}
+					{advanced}
+					height={px(118)}
+					onplay={play}
+				/>
 			{:else}
 				<p class="pb-4 text-center text-sm text-white/40">You're watching this game.</p>
 			{/if}
 		</div>
+
+		{#if mySeat != null}
+			<button
+				onclick={toggleAdvanced}
+				class="absolute right-3 bottom-3 rounded-lg px-2 py-1 text-[11px] ring-1 transition
+					{advanced
+					? 'bg-red-500/20 text-red-200 ring-red-400/40'
+					: 'bg-white/5 text-white/40 ring-white/10 hover:text-white/70'}"
+				aria-pressed={advanced}
+			>
+				Advanced {advanced ? 'on' : 'off'}
+			</button>
+		{/if}
 
 		<LogFeed log={doc.log} players={doc.players} />
 	</div>

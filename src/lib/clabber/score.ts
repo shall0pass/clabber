@@ -46,6 +46,7 @@ export function scoreHand(doc: GameDoc): HandResult {
 		trickPoints,
 		meldPoints,
 		set,
+		renege: false,
 		awarded,
 		runningAfter: [0, 0]
 	};

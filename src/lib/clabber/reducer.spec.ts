@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { RuleError, reduce } from './reducer';
 import { chooseBid, chooseCard } from './bot';
 import { createGame, SEATS } from './state';
-import type { GameDoc } from './types';
+import type { Card, GameDoc, MeldClaim } from './types';
 
 function fourBots(): GameDoc {
 	const doc = createGame('T', 0);
@@ -117,5 +117,78 @@ describe('ResetToLobby', () => {
 		expect(doc.trick).toBeNull();
 		expect(doc.players[0]).toMatchObject({ name: 'Ada' });
 		expect(doc.players[1]?.isBot).toBe(true);
+	});
+});
+
+describe('renege (Advanced mode)', () => {
+	// Hearts led; seat 1 holds hearts, so QS / AD are illegal for it.
+	function midTrick(): GameDoc {
+		const doc = createGame('T', 0);
+		doc.phase = 'trick';
+		doc.trump = 'S';
+		doc.maker = 0;
+		doc.hands = [[], ['9H', 'KH', 'QS', 'AD'], [], []];
+		doc.trick = {
+			number: 3,
+			leader: 0,
+			turn: 1,
+			plays: [{ seat: 0, card: 'AH' }],
+			winner: null
+		};
+		return doc;
+	}
+
+	it('still rejects an illegal card without allowIllegal', () => {
+		expect(() => reduce(midTrick(), { type: 'PlayCard', seat: 1, card: 'QS' })).toThrow(RuleError);
+	});
+
+	it('allowIllegal on a legal card just plays it, no renege', () => {
+		const doc = midTrick();
+		reduce(doc, { type: 'PlayCard', seat: 1, card: '9H', allowIllegal: true });
+		expect(doc.renege).toBeNull();
+		expect(doc.phase).toBe('trick');
+		expect(doc.trick?.plays).toHaveLength(2);
+	});
+
+	it('rejects a card that is not in hand even with allowIllegal', () => {
+		expect(() =>
+			reduce(midTrick(), { type: 'PlayCard', seat: 1, card: 'TD' as Card, allowIllegal: true })
+		).toThrow(RuleError);
+	});
+
+	it('an illegal card ends the hand: opponents take 162, reneging team nothing', () => {
+		const doc = midTrick();
+		reduce(doc, { type: 'PlayCard', seat: 1, card: 'QS', allowIllegal: true });
+
+		expect(doc.renege).toEqual({ seat: 1, card: 'QS' });
+		expect(doc.phase).toBe('handScored');
+		expect(doc.score.hands).toHaveLength(1);
+		const r = doc.score.hands[0];
+		expect(r.renege).toBe(true);
+		expect(r.awarded).toEqual([162, 0]); // team 0 (opponents) get 162; team 1 zero
+		expect(doc.score.running).toEqual([162, 0]);
+	});
+
+	it('adds the opponents’ announced meld to the 162', () => {
+		const doc = midTrick();
+		const dad: MeldClaim = {
+			kind: 'dad',
+			group: 'run',
+			suit: 'H',
+			cards: ['9H', 'TH', 'JH'],
+			points: 20,
+			top: 3
+		};
+		doc.melds.declared[2] = [dad]; // seat 2 is on team 0
+		reduce(doc, { type: 'PlayCard', seat: 1, card: 'AD', allowIllegal: true });
+		expect(doc.score.hands[0].awarded).toEqual([182, 0]);
+	});
+
+	it('a renege can win the game', () => {
+		const doc = midTrick();
+		doc.score.running = [400, 120];
+		reduce(doc, { type: 'PlayCard', seat: 1, card: 'QS', allowIllegal: true });
+		expect(doc.phase).toBe('gameOver');
+		expect(doc.winner).toBe(0);
 	});
 });

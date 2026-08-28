@@ -4,14 +4,14 @@
 // `legalBids` first; the throw is the backstop.
 
 import type { Action } from './actions';
-import type { GameDoc, Seat } from './types';
+import type { GameDoc, HandResult, Seat, Suit, TeamId } from './types';
 import { suitOf, trickWinner } from './cards';
 import { legalBids, sameBid, describeBid } from './bidding';
 import { deal } from './deal';
-import { detectMelds, resolveMeld } from './meld';
+import { detectMelds, resolveMeld, selectBestMelds } from './meld';
 import { legalMoves } from './play';
 import { checkGameEnd, scoreHand } from './score';
-import { nextSeat, teamOf } from './state';
+import { nextSeat, otherTeam, seatsOfTeam, teamOf } from './state';
 
 export class RuleError extends Error {
 	constructor(message: string) {
@@ -77,6 +77,7 @@ function resetToLobby(doc: GameDoc): void {
 		scoredTeam: null,
 		points: [0, 0]
 	};
+	doc.renege = null;
 	doc.score = { running: [0, 0], hands: [] };
 	doc.winner = null;
 	doc.log.push('back to the lobby for another game');
@@ -156,6 +157,7 @@ function startHand(doc: GameDoc, a: Extract<Action, { type: 'StartHand' }>): voi
 		scoredTeam: null,
 		points: [0, 0]
 	};
+	doc.renege = null;
 	doc.bidding = { round: 1, turn: nextSeat(dealer), passes: [], passedSuit: null };
 	doc.phase = 'bid1';
 	doc.log.push(`seat ${dealer} deals; up-card ${upCard}`);
@@ -225,9 +227,21 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 	const t = doc.trick;
 	if (!t) fail('no trick in progress');
 	if (a.seat !== t.turn) fail(`it is not seat ${a.seat}'s turn`);
-	if (!legalMoves(doc, a.seat).includes(a.card)) fail(`illegal card: ${a.card}`);
 
 	const hand = doc.hands[a.seat];
+	if (!hand.includes(a.card)) fail(`card not in hand: ${a.card}`);
+
+	if (!legalMoves(doc, a.seat).includes(a.card)) {
+		if (!a.allowIllegal) fail(`illegal card: ${a.card}`);
+		// Advanced mode: an illegal card is a renege — the hand ends now.
+		hand.splice(hand.indexOf(a.card), 1);
+		t.plays.push({ seat: a.seat, card: a.card });
+		doc.renege = { seat: a.seat, card: a.card };
+		doc.log.push(`seat ${a.seat} reneged (played ${a.card})`);
+		finishRenegedHand(doc, a.seat);
+		return;
+	}
+
 	hand.splice(hand.indexOf(a.card), 1);
 	t.plays.push({ seat: a.seat, card: a.card });
 
@@ -262,7 +276,43 @@ function advanceTrick(doc: GameDoc): void {
 }
 
 function finishHand(doc: GameDoc): void {
-	const result = scoreHand(doc);
+	settleHand(doc, scoreHand(doc));
+}
+
+/** Renege: the play stops and the opponents of the reneging team score 162
+ *  (all trick points) plus their own announced meld. The reneging team scores
+ *  nothing. */
+function finishRenegedHand(doc: GameDoc, renegingSeat: Seat): void {
+	const guilty = teamOf(renegingSeat);
+	const opp = otherTeam(guilty);
+	const [a, b] = seatsOfTeam(opp);
+	const oppMeld =
+		selectBestMelds(doc.melds.declared[a] ?? []).sum +
+		selectBestMelds(doc.melds.declared[b] ?? []).sum;
+
+	const meldPoints: [number, number] = [0, 0];
+	meldPoints[opp] = oppMeld;
+	doc.melds.points = [...meldPoints];
+	doc.melds.scoredTeam = oppMeld > 0 ? opp : null;
+	doc.melds.resolved = true;
+
+	const awarded: [number, number] = [0, 0];
+	awarded[opp] = 162 + oppMeld;
+
+	settleHand(doc, {
+		dealer: doc.dealer,
+		trump: doc.trump as Suit,
+		maker: doc.maker as TeamId,
+		trickPoints: [0, 0],
+		meldPoints,
+		set: false,
+		renege: true,
+		awarded,
+		runningAfter: [0, 0]
+	});
+}
+
+function settleHand(doc: GameDoc, result: HandResult): void {
 	doc.score.running[0] += result.awarded[0];
 	doc.score.running[1] += result.awarded[1];
 	result.runningAfter = [doc.score.running[0], doc.score.running[1]];
@@ -278,7 +328,7 @@ function finishHand(doc: GameDoc): void {
 		doc.phase = 'handScored';
 		doc.log.push(
 			`hand scored: team 0 ${doc.score.running[0]}, team 1 ${doc.score.running[1]}` +
-				(result.set ? ' (makers set)' : '')
+				(result.renege ? ' (renege)' : result.set ? ' (makers set)' : '')
 		);
 	}
 }

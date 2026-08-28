@@ -22,3 +22,5 @@ I want to see fireworks for the winning team and tears of sadness for the losers
 1. The playing cards are a little small on both desktop and mobile browsers.  increase the size.
 2. On a mobile device, it would be nice to be able to drag my finger over the cards so i can see which one i'm selecting.  The touch targets are a little small.
 3. Does the secret code do anything?  On the public cloudflare page, it doesn't allow me to use a secret code.  I don't see a place where a secret code exists to share once i start a game.  I only see the copy invite link button.
+4. Add an advanced button that allows users to renege.  They should be allowed to play any card in this mode and the score should reflect a renege accordingly.
+5. The cards cover up the score in the middle of the board.  Increase the space from the center of the table so it stays readable.

@@ -34,6 +34,7 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 			scoredTeam: null,
 			points: [0, 0]
 		},
+		renege: null,
 		score: { running: [0, 0], hands: [] },
 		winner: null,
 		log: []
