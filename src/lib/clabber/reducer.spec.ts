@@ -226,8 +226,10 @@ describe('renege (Advanced mode)', () => {
 	function midTrick(): GameDoc {
 		const doc = createGame('T', 0);
 		doc.phase = 'trick';
+		doc.advanced = true;
 		doc.trump = 'S';
 		doc.maker = 0;
+		doc.players = SEATS.map((s) => ({ seat: s, name: `P${s}`, isBot: false, lastSeen: 0 }));
 		doc.hands = [[], ['9H', 'KH', 'QS', 'AD'], [], []];
 		doc.trick = {
 			number: 3,
@@ -238,6 +240,15 @@ describe('renege (Advanced mode)', () => {
 		};
 		return doc;
 	}
+
+	const dad: MeldClaim = {
+		kind: 'dad',
+		group: 'run',
+		suit: 'H',
+		cards: ['9H', 'TH', 'JH'],
+		points: 20,
+		top: 3
+	};
 
 	it('still rejects an illegal card without allowIllegal', () => {
 		expect(() => reduce(midTrick(), { type: 'PlayCard', seat: 1, card: 'QS' })).toThrow(RuleError);
@@ -257,40 +268,75 @@ describe('renege (Advanced mode)', () => {
 		).toThrow(RuleError);
 	});
 
-	it('an illegal card ends the hand: opponents take 162, reneging team nothing', () => {
+	it('an illegal card just stands — play continues, no automatic loss', () => {
 		const doc = midTrick();
 		reduce(doc, { type: 'PlayCard', seat: 1, card: 'QS', allowIllegal: true });
 
-		expect(doc.renege).toEqual({ seat: 1, card: 'QS' });
+		expect(doc.renege).toEqual({ seat: 1, card: 'QS', called: false });
+		expect(doc.phase).toBe('trick');
+		expect(doc.trick?.plays).toHaveLength(2);
+		expect(doc.trick?.turn).toBe(2);
+		expect(doc.score.hands).toHaveLength(0);
+	});
+
+	it('the other team calling it ends the hand: caller’s team takes 162', () => {
+		const doc = midTrick();
+		reduce(doc, { type: 'PlayCard', seat: 1, card: 'QS', allowIllegal: true });
+		reduce(doc, { type: 'CallRenege', seat: 0 }); // seat 0 is team 0
+
+		expect(doc.renege?.called).toBe(true);
 		expect(doc.phase).toBe('handScored');
-		expect(doc.score.hands).toHaveLength(1);
 		const r = doc.score.hands[0];
 		expect(r.renege).toBe(true);
-		expect(r.awarded).toEqual([162, 0]); // team 0 (opponents) get 162; team 1 zero
+		expect(r.awarded).toEqual([162, 0]);
 		expect(doc.score.running).toEqual([162, 0]);
 	});
 
-	it('adds the opponents’ announced meld to the 162', () => {
+	it('adds the calling team’s announced meld to the 162', () => {
 		const doc = midTrick();
-		const dad: MeldClaim = {
-			kind: 'dad',
-			group: 'run',
-			suit: 'H',
-			cards: ['9H', 'TH', 'JH'],
-			points: 20,
-			top: 3
-		};
 		doc.melds.declared[2] = [dad]; // seat 2 is on team 0
 		reduce(doc, { type: 'PlayCard', seat: 1, card: 'AD', allowIllegal: true });
+		reduce(doc, { type: 'CallRenege', seat: 2 });
 		expect(doc.score.hands[0].awarded).toEqual([182, 0]);
 	});
 
-	it('a renege can win the game', () => {
+	it('a called renege can win the game', () => {
 		const doc = midTrick();
 		doc.score.running = [400, 120];
 		reduce(doc, { type: 'PlayCard', seat: 1, card: 'QS', allowIllegal: true });
+		reduce(doc, { type: 'CallRenege', seat: 0 });
 		expect(doc.phase).toBe('gameOver');
 		expect(doc.winner).toBe(0);
+	});
+
+	it('an unproven call is penalised: the accused team takes 162 plus its meld', () => {
+		const doc = midTrick(); // nobody played an illegal card
+		doc.melds.declared[3] = [dad]; // seat 3 is on team 1 (the accused team)
+		reduce(doc, { type: 'CallRenege', seat: 0 }); // team 0 calls with nothing to show
+
+		expect(doc.phase).toBe('handScored');
+		const r = doc.score.hands[0];
+		expect(r.renege).toBe(true);
+		expect(r.awarded).toEqual([0, 182]);
+	});
+
+	it('calling on your own team’s illegal card is unproven and costs your team', () => {
+		const doc = midTrick();
+		reduce(doc, { type: 'PlayCard', seat: 1, card: 'QS', allowIllegal: true }); // seat 1 = team 1
+		reduce(doc, { type: 'CallRenege', seat: 3 }); // seat 3 = team 1, same team — not a valid call
+
+		expect(doc.renege?.called).toBe(false);
+		expect(doc.score.hands[0].awarded).toEqual([162, 0]); // team 0 takes it
+	});
+
+	it('CallRenege only works in Advanced mode and only while the hand is live', () => {
+		const off = midTrick();
+		off.advanced = false;
+		expect(() => reduce(off, { type: 'CallRenege', seat: 0 })).toThrow(RuleError);
+
+		const done = midTrick();
+		reduce(done, { type: 'CallRenege', seat: 0 }); // ends the hand
+		expect(() => reduce(done, { type: 'CallRenege', seat: 1 })).toThrow(RuleError);
 	});
 });
 

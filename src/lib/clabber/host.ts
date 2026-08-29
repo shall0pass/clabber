@@ -5,7 +5,7 @@
 import type { Action } from './actions';
 import type { GameDoc, Seat } from './types';
 import { chooseBid, chooseCard } from './bot';
-import { SEATS } from './state';
+import { SEATS, otherTeam, seatsOfTeam, teamOf } from './state';
 
 /** How long presence silence means a host is gone. Matches the presence
  *  staleness window so a departed host is dropped consistently. */
@@ -26,6 +26,15 @@ export function nextBotAction(
 	doc: GameDoc,
 	makeSeed: () => string = () => crypto.randomUUID()
 ): Action | null {
+	// A competent opponent catches a renege. If the other team left an illegal
+	// card uncalled and one of its watchers is a bot, that bot calls it.
+	const r = doc.renege;
+	if (r && !r.called && ['meld', 'meldReveal', 'trick', 'trickDone'].includes(doc.phase)) {
+		for (const s of seatsOfTeam(otherTeam(teamOf(r.seat)))) {
+			if (doc.players[s]?.isBot) return { type: 'CallRenege', seat: s };
+		}
+	}
+
 	switch (doc.phase) {
 		case 'bid1':
 		case 'bid2': {

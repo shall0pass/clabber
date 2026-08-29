@@ -27,8 +27,14 @@ export type Action =
 	 *  human can also click through sooner. Any meld not yet shown is shown now. */
 	| { type: 'AdvanceMeldReveal' }
 	/** `allowIllegal` (Advanced mode) lets the seat play a card that breaks the
-	 *  rules of following/trumping — that ends the hand as a renege. */
+	 *  rules of following/trumping. The card stands and play continues; it is
+	 *  only penalised if the other team calls the renege. */
 	| { type: 'PlayCard'; seat: Seat; card: Card; allowIllegal?: boolean }
+	/** Call the renege on the other team's earlier illegal card (Advanced mode).
+	 *  Only a member of the non-offending team may call, and only before the
+	 *  last trick is collected. Ends the hand: the caller's team scores 162 plus
+	 *  its meld. */
+	| { type: 'CallRenege'; seat: Seat }
 	/** Collect a completed trick and move on (from phase `trickDone`). The host
 	 *  fires this after a short pause so every client sees all four cards. */
 	| { type: 'AdvanceTrick' }

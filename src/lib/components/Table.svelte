@@ -92,8 +92,8 @@
 		return teamOf(mySeat) === team ? 'Your team' : 'The other team';
 	}
 
-	// Advanced mode: playing an illegal card is a renege, so make it a deliberate
-	// two-step — tap the card, then confirm.
+	// Advanced mode: playing an illegal card might be a renege, so make it a
+	// deliberate two-step — tap the card, then confirm.
 	let pendingRenege = $state<CardT | null>(null);
 	function play(card: CardT) {
 		if (mySeat == null) return;
@@ -112,6 +112,25 @@
 	// Drop a half-made renege choice as soon as it stops being our turn.
 	$effect(() => {
 		if (!handActive) pendingRenege = null;
+	});
+
+	// Calling a renege is a standing option during Advanced play — you decide,
+	// from your own read of the table, whether the other team played an illegal
+	// card. Get it wrong and the penalty lands on your team instead, so it's a
+	// deliberate two-step.
+	const mayCallRenege = $derived(
+		advanced &&
+			mySeat != null &&
+			doc != null &&
+			['meld', 'meldReveal', 'trick', 'trickDone'].includes(doc.phase)
+	);
+	let pendingCall = $state(false);
+	function callRenege() {
+		if (mySeat != null) store.tryChange({ type: 'CallRenege', seat: mySeat });
+		pendingCall = false;
+	}
+	$effect(() => {
+		if (!mayCallRenege) pendingCall = false;
 	});
 	function nextHand() {
 		store.tryChange({ type: 'StartHand', seed: crypto.randomUUID() });
@@ -281,8 +300,42 @@
 				/>
 				{#if advanced && handActive}
 					<p class="text-center text-xs text-red-300">
-						Advanced: any card is playable — an illegal one is a renege.
+						Advanced: any card is playable — an illegal one only costs you if the other team calls
+						it.
 					</p>
+				{/if}
+				{#if mayCallRenege && !pendingCall && !pendingRenege}
+					<button
+						onclick={() => (pendingCall = true)}
+						class="rounded-lg bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-200 ring-1 ring-red-400/40 hover:bg-red-500/25"
+					>
+						Call renege
+					</button>
+				{/if}
+				{#if pendingCall}
+					<div
+						class="flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/60"
+					>
+						<p class="text-sm text-red-100">
+							Call a renege on {teamName(teamOf(mySeat) ^ 1)}? If they didn't play an illegal card,
+							the penalty falls on {teamName(teamOf(mySeat))} instead — the other team takes 162 plus
+							any meld and the hand ends.
+						</p>
+						<div class="flex gap-2">
+							<button
+								onclick={() => (pendingCall = false)}
+								class="rounded-lg bg-white/10 px-4 py-1.5 text-sm font-semibold hover:bg-white/20"
+							>
+								Cancel
+							</button>
+							<button
+								onclick={callRenege}
+								class="rounded-lg bg-red-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-400"
+							>
+								Call renege
+							</button>
+						</div>
+					</div>
 				{/if}
 				{#if pendingRenege}
 					<div
@@ -290,8 +343,8 @@
 					>
 						<p class="text-sm text-red-100">
 							<span class="font-semibold">{pendingRenege}</span> breaks the follow rules. Play it
-							anyway? That's a renege — {teamName(mySeat != null ? teamOf(mySeat) ^ 1 : 1)} scores 162
-							plus their meld and the hand ends.
+							anyway? It stands unless {teamName(mySeat != null ? teamOf(mySeat) ^ 1 : 1)} catches it
+							— then they score 162 plus their meld and the hand ends.
 						</p>
 						<div class="flex gap-2">
 							<button
@@ -304,7 +357,7 @@
 								onclick={confirmRenege}
 								class="rounded-lg bg-red-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-400"
 							>
-								Renege
+								Play it
 							</button>
 						</div>
 					</div>

@@ -178,8 +178,9 @@
 		<span>
 			<span class="font-semibold">Advanced: allow reneging</span>
 			<span class="mt-0.5 block text-white/50">
-				Players may play any card. An illegal one is a renege — the other team takes 162 plus their
-				meld. Set this before the deal; it's locked once the game starts.
+				Players may play any card. An illegal one isn't an automatic loss — it stands unless the
+				other team calls the renege before the last trick, and then they take 162 plus their meld.
+				Set this before the deal; it's locked once the game starts.
 			</span>
 		</span>
 	</label>

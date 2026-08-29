@@ -289,14 +289,15 @@ function trickSection(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection
 		const legal = legalMoves(doc, mySeat);
 		if (legal.length) {
 			points.push(`Your turn. Cards you may legally play: ${legal.map(cardTag).join(' ')}.`);
-			if (doc.advanced && legal.length < doc.hands[mySeat].length) {
-				points.push(
-					'Advanced mode is on, so the table will let you play any card — but an illegal one is a renege and hands the whole hand (162 plus meld) to the other team.'
-				);
-			}
 		}
 	} else if (t.turn !== mySeat) {
 		points.push(`Waiting for ${who(t.turn)} to play.`);
+	}
+
+	if (doc.advanced && mySeat != null) {
+		points.push(
+			'Advanced mode: any card is playable. An illegal card is not an automatic loss — it stands unless the other team notices and taps “Call renege” before the last trick is collected. A correct call scores that team 162 plus any meld; a call with nothing to back it up hands the same to the other side.'
+		);
 	}
 
 	return {

@@ -156,9 +156,10 @@ export interface GameDoc {
 
 	melds: MeldState;
 
-	/** Set when a player played an illegal card in Advanced mode; the hand is
-	 *  then scored as a renege. */
-	renege: { seat: Seat; card: Card } | null;
+	/** Set when a player played an illegal card in Advanced mode. The card
+	 *  stands and the hand plays on; it only becomes a scored renege if the
+	 *  other team calls it (`called`) before the last trick is collected. */
+	renege: { seat: Seat; card: Card; called: boolean } | null;
 
 	score: {
 		running: [number, number];

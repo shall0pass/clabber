@@ -51,6 +51,8 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return advanceMeldReveal(doc);
 		case 'PlayCard':
 			return playCard(doc, action);
+		case 'CallRenege':
+			return callRenege(doc, action);
 		case 'AdvanceTrick':
 			return advanceTrick(doc);
 		case 'HostClaim':
@@ -330,19 +332,21 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 	const hand = doc.hands[a.seat];
 	if (!hand.includes(a.card)) fail(`card not in hand: ${a.card}`);
 
-	if (!legalMoves(doc, a.seat).includes(a.card)) {
-		if (!a.allowIllegal) fail(`illegal card: ${a.card}`);
-		// Advanced mode: an illegal card is a renege — the hand ends now.
-		hand.splice(hand.indexOf(a.card), 1);
-		t.plays.push({ seat: a.seat, card: a.card });
-		doc.renege = { seat: a.seat, card: a.card };
-		doc.log.push(`seat ${a.seat} reneged (played ${a.card})`);
-		finishRenegedHand(doc, a.seat);
-		return;
-	}
+	const legal = legalMoves(doc, a.seat).includes(a.card);
+	if (!legal && !a.allowIllegal) fail(`illegal card: ${a.card}`);
 
 	hand.splice(hand.indexOf(a.card), 1);
 	t.plays.push({ seat: a.seat, card: a.card });
+
+	if (!legal) {
+		// Advanced mode: the illegal card stands and play continues. It only
+		// costs the hand if the other team calls the renege (see `callRenege`)
+		// before the last trick is collected. Record the first offence only.
+		if (!doc.renege) {
+			doc.renege = { seat: a.seat, card: a.card, called: false };
+			doc.log.push(`seat ${a.seat} played an illegal card (${a.card}); renege may be called`);
+		}
+	}
 
 	if (t.plays.length < 4) {
 		t.turn = nextSeat(a.seat);
@@ -353,6 +357,37 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 	t.winner = trickWinner(t.plays, doc.trump);
 	doc.phase = 'trickDone';
 	doc.log.push(`trick ${t.number} to seat ${t.winner}`);
+}
+
+/** The window in which an uncalled renege can still be caught: any time before
+ *  the last trick is collected and the hand is scored. */
+const RENEGE_CALLABLE: ReadonlySet<GameDoc['phase']> = new Set([
+	'meld',
+	'meldReveal',
+	'trick',
+	'trickDone'
+]);
+
+function callRenege(doc: GameDoc, a: Extract<Action, { type: 'CallRenege' }>): void {
+	if (!doc.advanced) fail('renege calls are only used in Advanced mode');
+	if (!RENEGE_CALLABLE.has(doc.phase)) fail(`too late to call the renege (phase ${doc.phase})`);
+	if (!doc.players[a.seat]) fail(`seat ${a.seat} is empty`);
+
+	const callerTeam = teamOf(a.seat);
+	const r = doc.renege;
+	// A call is upheld only when the *other* team really did leave an illegal
+	// card uncalled. Anything else is an unproven claim, which the rules punish
+	// exactly like a renege by the team that made it.
+	const upheld = r != null && !r.called && teamOf(r.seat) === otherTeam(callerTeam);
+
+	if (upheld) {
+		r.called = true;
+		doc.log.push(`seat ${a.seat} calls the renege on seat ${r.seat} — upheld`);
+		finishRenegedHand(doc, r.seat);
+	} else {
+		doc.log.push(`seat ${a.seat} claims a renege — not proven; it falls on their team`);
+		finishRenegedHand(doc, a.seat);
+	}
 }
 
 function advanceTrick(doc: GameDoc): void {

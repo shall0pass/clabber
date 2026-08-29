@@ -185,18 +185,21 @@ export class Host {
 			interHandDelayMs,
 			redealDelayMs
 		} = this.#opts;
+		const thinkDelay = minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
 		const delay =
-			doc.phase === 'trickDone'
-				? trickDelayMs
-				: doc.phase === 'handScored'
-					? interHandDelayMs
-					: doc.phase === 'redeal'
-						? redealDelayMs
-						: doc.phase === 'meldReveal'
-							? pending.type === 'AdvanceMeldReveal'
-								? meldRevealDelayMs
-								: minDelayMs + Math.random() * (maxDelayMs - minDelayMs)
-							: minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
+			pending.type === 'CallRenege'
+				? thinkDelay // catch it promptly, whatever the phase's usual hold is
+				: doc.phase === 'trickDone'
+					? trickDelayMs
+					: doc.phase === 'handScored'
+						? interHandDelayMs
+						: doc.phase === 'redeal'
+							? redealDelayMs
+							: doc.phase === 'meldReveal'
+								? pending.type === 'AdvanceMeldReveal'
+									? meldRevealDelayMs
+									: thinkDelay
+								: thinkDelay;
 
 		this.#moveTimer = setTimeout(() => {
 			this.#moveTimer = undefined;
