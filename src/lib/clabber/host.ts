@@ -3,8 +3,9 @@
 // `src/lib/repo/host.ts`.
 
 import type { Action } from './actions';
-import type { GameDoc } from './types';
+import type { GameDoc, Seat } from './types';
 import { chooseBid, chooseCard } from './bot';
+import { SEATS } from './state';
 
 /** How long presence silence means a host is gone. Matches the presence
  *  staleness window so a departed host is dropped consistently. */
@@ -38,6 +39,16 @@ export function nextBotAction(
 			// Announce meld before playing the first card, then play it.
 			if (doc.melds.declared[seat] == null) return { type: 'AnnounceMeld', seat };
 			return { type: 'PlayCard', seat, card: chooseCard(doc, seat) };
+		}
+		case 'meldReveal': {
+			// Show each bot's announced meld, then let the host time out the pause
+			// (so a human at the table can read the reveal) with AdvanceMeldReveal.
+			const pending = (SEATS as readonly Seat[]).find((s) => {
+				const d = doc.melds.declared[s];
+				return d != null && d.length > 0 && !doc.melds.shown[s] && !!doc.players[s]?.isBot;
+			});
+			if (pending != null) return { type: 'ShowMeld', seat: pending };
+			return { type: 'AdvanceMeldReveal' };
 		}
 		case 'trick': {
 			const seat = doc.trick?.turn;

@@ -22,8 +22,11 @@ export interface HostOptions {
 	/** Humanising think-time bounds for a bot move (ms). */
 	minDelayMs?: number;
 	maxDelayMs?: number;
-	/** How long to hold a completed trick on screen before collecting it (ms). */
+	/** How long to hold a completed trick on screen before collecting it (ms).
+	 *  A human can collect it sooner with the "Continue" button. */
 	trickDelayMs?: number;
+	/** How long to hold the meld reveal on screen before trick two (ms). */
+	meldRevealDelayMs?: number;
 	/** Pause on the score screen before dealing the next hand (ms). */
 	interHandDelayMs?: number;
 	/** Pause before re-dealing after everyone passed twice (ms). */
@@ -39,10 +42,12 @@ export interface HostOptions {
 const DEFAULTS: Required<HostOptions> = {
 	minDelayMs: 450,
 	maxDelayMs: 1150,
-	// Long enough that everyone sees all four cards of a trick.
-	trickDelayMs: 1400,
-	// Long enough to read the hand's score breakdown before the next deal.
-	interHandDelayMs: 5000,
+	// A long hold so there's time to study what was played; the "Continue"
+	// button lets anyone move on sooner.
+	trickDelayMs: 15000,
+	meldRevealDelayMs: 15000,
+	// Long enough to read the hand's score breakdown; "Next hand" moves on sooner.
+	interHandDelayMs: 15000,
 	redealDelayMs: 700,
 	electionIntervalMs: 2500,
 	seatGraceMs: 25000,
@@ -169,9 +174,17 @@ export class Host {
 		if (!this.isHost) return;
 
 		const doc = this.#store.doc;
-		if (!doc || !nextBotAction(doc, this.#opts.makeSeed)) return;
+		const pending = nextBotAction(doc!, this.#opts.makeSeed);
+		if (!doc || !pending) return;
 
-		const { minDelayMs, maxDelayMs, trickDelayMs, interHandDelayMs, redealDelayMs } = this.#opts;
+		const {
+			minDelayMs,
+			maxDelayMs,
+			trickDelayMs,
+			meldRevealDelayMs,
+			interHandDelayMs,
+			redealDelayMs
+		} = this.#opts;
 		const delay =
 			doc.phase === 'trickDone'
 				? trickDelayMs
@@ -179,7 +192,11 @@ export class Host {
 					? interHandDelayMs
 					: doc.phase === 'redeal'
 						? redealDelayMs
-						: minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
+						: doc.phase === 'meldReveal'
+							? pending.type === 'AdvanceMeldReveal'
+								? meldRevealDelayMs
+								: minDelayMs + Math.random() * (maxDelayMs - minDelayMs)
+							: minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
 
 		this.#moveTimer = setTimeout(() => {
 			this.#moveTimer = undefined;

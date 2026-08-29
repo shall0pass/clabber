@@ -75,6 +75,10 @@ export function coachSections(doc: GameDoc, mySeat: Seat | null): CoachSection[]
 			sections.push(trickSection(doc, mySeat, who));
 			break;
 
+		case 'meldReveal':
+			sections.push(meldRevealSection(doc, mySeat, who));
+			break;
+
 		case 'trick':
 		case 'trickDone':
 			sections.push(trickSection(doc, mySeat, who));
@@ -189,18 +193,43 @@ function meldSection(doc: GameDoc, mySeat: Seat | null): CoachSection {
 						.map(cardTag)
 						.join(' ')} (${c.points})`
 			);
-			points.push(`In your hand: ${names.join('; ')}. Announcing is worth ${best.sum}.`);
+			points.push(`In your hand: ${names.join('; ')}. Announcing all of it is worth ${best.sum}.`);
 			points.push(
 				doc.melds.declared[mySeat] != null
 					? 'You have already announced this hand.'
-					: 'Tap “Announce” before you play to claim it.'
+					: 'Tick the melds you want to call, then tap “Announce” before you play. Leave a box unticked to keep that one quiet.'
 			);
 		} else {
 			points.push('You have no meld this hand — just play when it’s your turn.');
 		}
 	}
 
-	return { title: 'Meld — claim it before you play', points };
+	return { title: 'Meld — call it before you play', points };
+}
+
+function meldRevealSection(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection {
+	const points: string[] = [
+		'The first trick is in. Everyone who called meld now shows it, so the table can check who has the best one.',
+		'The team with the single highest meld scores the sum of all its melds; the other team scores nothing — except Bella, which always scores.'
+	];
+
+	const announcers = ([0, 1, 2, 3] as Seat[]).filter((s) => {
+		const d = doc.melds.declared[s];
+		return d != null && d.length > 0;
+	});
+	if (announcers.length) {
+		points.push(
+			`Called meld: ${announcers.map((s) => `${who(s)}${doc.melds.shown[s] ? ' (shown)' : ''}`).join(', ')}.`
+		);
+	}
+
+	if (mySeat != null && (doc.melds.declared[mySeat]?.length ?? 0) > 0 && !doc.melds.shown[mySeat]) {
+		points.push('Tap “Show my meld” to reveal your cards, then “Continue”.');
+	} else {
+		points.push('Tap “Continue” when you’ve seen enough — the table plays on shortly either way.');
+	}
+
+	return { title: 'Showing meld', points };
 }
 
 function trickSection(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection {

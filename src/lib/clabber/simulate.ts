@@ -47,6 +47,17 @@ function step(doc: GameDoc, nextSeed: () => string): void {
 			reduce(doc, { type: 'PlayCard', seat, card });
 			return;
 		}
+		case 'meldReveal': {
+			const pending = SEATS.find((s) => {
+				const d = doc.melds.declared[s];
+				return d != null && d.length > 0 && !doc.melds.shown[s];
+			});
+			reduce(
+				doc,
+				pending != null ? { type: 'ShowMeld', seat: pending } : { type: 'AdvanceMeldReveal' }
+			);
+			return;
+		}
 		case 'trickDone': {
 			reduce(doc, { type: 'AdvanceTrick' });
 			return;

@@ -1,6 +1,6 @@
 // Every mutation to a `GameDoc` goes through `reduce` as one of these actions.
 
-import type { Bid, Card, Seat } from './types';
+import type { Bid, Card, MeldClaim, Seat } from './types';
 
 export type Action =
 	| { type: 'JoinSeat'; seat: Seat; name: string; actorId?: string }
@@ -17,7 +17,15 @@ export type Action =
 	 *  dealer; from `redeal` (or the first hand) it keeps the current dealer. */
 	| { type: 'StartHand'; seed: string }
 	| { type: 'Bid'; seat: Seat; bid: Bid }
-	| { type: 'AnnounceMeld'; seat: Seat }
+	/** Announce meld before playing the first trick. `claims` is the subset of
+	 *  the seat's holdable melds the player chose to call; omit it to claim every
+	 *  meld the hand contains (bots and older callers). */
+	| { type: 'AnnounceMeld'; seat: Seat; claims?: MeldClaim[] }
+	/** Show an announced meld to the table during the `meldReveal` step. */
+	| { type: 'ShowMeld'; seat: Seat }
+	/** Leave `meldReveal` for trick two. The host fires this after a pause; a
+	 *  human can also click through sooner. Any meld not yet shown is shown now. */
+	| { type: 'AdvanceMeldReveal' }
 	/** `allowIllegal` (Advanced mode) lets the seat play a card that breaks the
 	 *  rules of following/trumping — that ends the hand as a renege. */
 	| { type: 'PlayCard'; seat: Seat; card: Card; allowIllegal?: boolean }

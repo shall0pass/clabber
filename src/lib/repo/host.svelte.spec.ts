@@ -19,6 +19,7 @@ function setup(clientId: string) {
 		minDelayMs: 0,
 		maxDelayMs: 0,
 		trickDelayMs: 0,
+		meldRevealDelayMs: 0,
 		interHandDelayMs: 0,
 		redealDelayMs: 0,
 		electionIntervalMs: 200,
@@ -42,7 +43,9 @@ describe('Host', () => {
 			await wait(20);
 		}
 		host.stop();
-		expect(['meld', 'trick', 'handScored', 'redeal', 'gameOver']).toContain(store.doc?.phase);
+		expect(['meld', 'meldReveal', 'trick', 'handScored', 'redeal', 'gameOver']).toContain(
+			store.doc?.phase
+		);
 	});
 
 	it('does not drive the bots when another live client is the host', async () => {

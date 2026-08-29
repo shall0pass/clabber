@@ -1,12 +1,27 @@
 <script lang="ts">
-	import type { PlayerSlot } from '$lib/clabber/types';
+	import { teamOf } from '$lib/clabber/state';
+	import { SUIT_NAME, cardTag } from '$lib/cards/display';
+	import type { PlayerSlot, Seat, Suit } from '$lib/clabber/types';
 
-	let { log = [], players = [] }: { log?: string[]; players?: (PlayerSlot | null)[] } = $props();
+	let {
+		log = [],
+		players = [],
+		mySeat = null
+	}: { log?: string[]; players?: (PlayerSlot | null)[]; mySeat?: Seat | null } = $props();
 
 	let open = $state(false);
 
+	function teamName(n: number): string {
+		if (mySeat == null) return n === 0 ? 'Team A' : 'Team B';
+		return teamOf(mySeat) === n ? 'your team' : 'the other team';
+	}
+
 	function humanise(line: string): string {
-		return line.replace(/seat (\d)/g, (_, n) => players[Number(n)]?.name ?? `seat ${n}`);
+		return line
+			.replace(/seat (\d)/g, (_, n) => players[Number(n)]?.name ?? `seat ${n}`)
+			.replace(/team (\d)/g, (_, n) => teamName(Number(n)))
+			.replace(/makes ([SHDC]) trump/g, (_, s) => `makes ${SUIT_NAME[s as Suit]} trump`)
+			.replace(/up-card ([AKQJT9][SHDC])/g, (_, c) => `up-card ${cardTag(c)}`);
 	}
 	const recent = $derived(log.slice(-14).map(humanise));
 </script>

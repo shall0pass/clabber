@@ -21,6 +21,7 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 		advanced: false,
 		training: false,
 		dealer: 0,
+		makerSeat: null,
 		seed: '',
 		hands: [[], [], [], []],
 		upCard: null,
@@ -32,6 +33,7 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 		lastTrickWinner: null,
 		melds: {
 			declared: [null, null, null, null],
+			shown: [false, false, false, false],
 			resolved: false,
 			scoredTeam: null,
 			points: [0, 0]

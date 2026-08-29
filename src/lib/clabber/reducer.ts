@@ -8,7 +8,7 @@ import type { GameDoc, HandResult, Seat, Suit, TeamId } from './types';
 import { suitOf, trickWinner } from './cards';
 import { legalBids, sameBid, describeBid } from './bidding';
 import { deal } from './deal';
-import { detectMelds, resolveMeld, selectBestMelds } from './meld';
+import { detectMelds, resolveMeld, selectBestMelds, validateClaims } from './meld';
 import { legalMoves } from './play';
 import { checkGameEnd, scoreHand } from './score';
 import { nextSeat, otherTeam, seatsOfTeam, teamOf } from './state';
@@ -45,6 +45,10 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return bid(doc, action);
 		case 'AnnounceMeld':
 			return announceMeld(doc, action);
+		case 'ShowMeld':
+			return showMeld(doc, action);
+		case 'AdvanceMeldReveal':
+			return advanceMeldReveal(doc);
 		case 'PlayCard':
 			return playCard(doc, action);
 		case 'AdvanceTrick':
@@ -103,6 +107,7 @@ function resetToLobby(doc: GameDoc): void {
 		fail(`can only reset to the lobby after a game (phase ${doc.phase})`);
 	doc.phase = 'lobby';
 	doc.dealer = 0;
+	doc.makerSeat = null;
 	doc.seed = '';
 	doc.hands = [[], [], [], []];
 	doc.upCard = null;
@@ -114,6 +119,7 @@ function resetToLobby(doc: GameDoc): void {
 	doc.lastTrickWinner = null;
 	doc.melds = {
 		declared: [null, null, null, null],
+		shown: [false, false, false, false],
 		resolved: false,
 		scoredTeam: null,
 		points: [0, 0]
@@ -190,6 +196,7 @@ function startHand(doc: GameDoc, a: Extract<Action, { type: 'StartHand' }>): voi
 	const { hands, upCard } = deal(a.seed, dealer);
 
 	doc.dealer = dealer;
+	doc.makerSeat = null;
 	doc.seed = a.seed;
 	doc.hands = hands;
 	doc.upCard = upCard;
@@ -200,6 +207,7 @@ function startHand(doc: GameDoc, a: Extract<Action, { type: 'StartHand' }>): voi
 	doc.lastTrickWinner = null;
 	doc.melds = {
 		declared: [null, null, null, null],
+		shown: [false, false, false, false],
 		resolved: false,
 		scoredTeam: null,
 		points: [0, 0]
@@ -248,6 +256,7 @@ function bid(doc: GameDoc, a: Extract<Action, { type: 'Bid' }>): void {
 		a.bid === 'accept' ? suitOf(doc.upCard as NonNullable<GameDoc['upCard']>) : a.bid.suit;
 	doc.trump = trump;
 	doc.maker = teamOf(a.seat);
+	doc.makerSeat = a.seat;
 	doc.bidding = null;
 	doc.upCard = null;
 	const leader = nextSeat(doc.dealer);
@@ -265,7 +274,50 @@ function announceMeld(doc: GameDoc, a: Extract<Action, { type: 'AnnounceMeld' }>
 	if (t.plays.some((p) => p.seat === a.seat)) {
 		fail(`seat ${a.seat} has already played to the first trick`);
 	}
-	doc.melds.declared[a.seat] = detectMelds(doc.hands[a.seat], doc.trump);
+	const available = detectMelds(doc.hands[a.seat], doc.trump);
+	// `claims` omitted → claim everything the hand holds (bots, older callers).
+	// Given a list, keep only the ones the hand can actually back up.
+	doc.melds.declared[a.seat] = a.claims ? validateClaims(a.claims, available) : available;
+}
+
+/** Show an announced meld to the table during `meldReveal`. */
+function showMeld(doc: GameDoc, a: Extract<Action, { type: 'ShowMeld' }>): void {
+	if (doc.phase !== 'meldReveal') fail(`nothing to show in phase ${doc.phase}`);
+	const declared = doc.melds.declared[a.seat];
+	if (declared == null || declared.length === 0) fail(`seat ${a.seat} announced no meld`);
+	if (!doc.melds.shown[a.seat]) {
+		doc.melds.shown[a.seat] = true;
+		doc.log.push(`seat ${a.seat} shows meld`);
+	}
+	// Once every announcer has shown, lock in the comparison so the reveal can
+	// display the outcome while it stays on screen.
+	if (!doc.melds.resolved && allAnnouncersShown(doc)) resolveMeld(doc);
+}
+
+/** Leave `meldReveal` and start trick two. Anything not yet shown is shown now
+ *  (a generous house rule — no forfeit for a slow click against the bots). */
+function advanceMeldReveal(doc: GameDoc): void {
+	if (doc.phase !== 'meldReveal') fail(`not revealing meld (phase ${doc.phase})`);
+	if (!doc.melds.resolved) {
+		for (const s of [0, 1, 2, 3] as Seat[]) {
+			const d = doc.melds.declared[s];
+			if (d != null && d.length > 0) doc.melds.shown[s] = true;
+		}
+		resolveMeld(doc);
+	}
+	doc.phase = 'trick';
+}
+
+function allAnnouncersShown(doc: GameDoc): boolean {
+	return ([0, 1, 2, 3] as Seat[]).every((s) => {
+		const d = doc.melds.declared[s];
+		return d == null || d.length === 0 || doc.melds.shown[s];
+	});
+}
+
+/** True once at least one seat has announced a non-empty meld this hand. */
+export function anyMeldAnnounced(doc: GameDoc): boolean {
+	return doc.melds.declared.some((d) => d != null && d.length > 0);
 }
 
 function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void {
@@ -313,12 +365,23 @@ function advanceTrick(doc: GameDoc): void {
 	doc.lastTrickWinner = winner;
 	const n = t.number;
 
-	if (n === 1) resolveMeld(doc);
 	if (n === 6) {
 		finishHand(doc); // sets phase to handScored / gameOver and trick to null
 		return;
 	}
+
 	doc.trick = { number: n + 1, leader: winner, turn: winner, plays: [], winner: null };
+
+	if (n === 1) {
+		if (anyMeldAnnounced(doc)) {
+			// Hold on trick two's board while announcers show their meld.
+			doc.phase = 'meldReveal';
+			doc.log.push('meld announced — revealing before trick two');
+			return;
+		}
+		resolveMeld(doc); // nobody announced: settle the (empty) meld and play on
+	}
+
 	doc.phase = 'trick';
 }
 

@@ -20,6 +20,7 @@ export type Phase =
 	| 'bid2' // round 2 — name any other suit, or pass
 	| 'redeal' // everyone passed twice; the same dealer deals again
 	| 'meld' // first trick in progress; meld announcements still open
+	| 'meldReveal' // first trick collected; announcers show their meld before trick 2
 	| 'trick' // tricks 2..6
 	| 'trickDone' // all four cards played; held on screen before it is collected
 	| 'handScored' // hand finished, showing the breakdown
@@ -75,8 +76,12 @@ export interface MeldClaim {
 
 export interface MeldState {
 	/** Per seat: the melds announced before that seat's first trick-1 card, or
-	 *  `null` if the seat never announced (meld is then forfeit). */
+	 *  `null` if the seat never announced (meld is then forfeit). An empty array
+	 *  means the seat announced but claimed nothing. */
 	declared: (MeldClaim[] | null)[];
+	/** Per seat: whether the seat has shown its announced meld to the table
+	 *  during the `meldReveal` step. A seat with no declared meld stays `false`. */
+	shown: boolean[];
 	resolved: boolean;
 	/** Team that won the meld comparison and scores its full meld total; `null`
 	 *  when nobody has meld or the comparison is a push. */
@@ -130,6 +135,9 @@ export interface GameDoc {
 	 *  Purely a learning aid, so it can be switched on or off at any time. */
 	training: boolean;
 	dealer: Seat;
+	/** The seat that named trump this hand (for "made by …" on the table), or
+	 *  `null` before a trump is set. */
+	makerSeat: Seat | null;
 	/** Seed of the current deal (kept for replay / debugging). */
 	seed: string;
 

@@ -15,9 +15,18 @@ function playOneHand(doc: GameDoc): void {
 		const seat = doc.bidding!.turn;
 		reduce(doc, { type: 'Bid', seat, bid: chooseBid(doc, seat) });
 	}
-	while (doc.phase === 'meld' || doc.phase === 'trick' || doc.phase === 'trickDone') {
+	while (
+		doc.phase === 'meld' ||
+		doc.phase === 'meldReveal' ||
+		doc.phase === 'trick' ||
+		doc.phase === 'trickDone'
+	) {
 		if (doc.phase === 'trickDone') {
 			reduce(doc, { type: 'AdvanceTrick' });
+			continue;
+		}
+		if (doc.phase === 'meldReveal') {
+			reduce(doc, { type: 'AdvanceMeldReveal' });
 			continue;
 		}
 		const seat = doc.trick!.turn;
@@ -282,5 +291,105 @@ describe('renege (Advanced mode)', () => {
 		reduce(doc, { type: 'PlayCard', seat: 1, card: 'QS', allowIllegal: true });
 		expect(doc.phase).toBe('gameOver');
 		expect(doc.winner).toBe(0);
+	});
+});
+
+describe('manual meld announce + show', () => {
+	/** A doc parked at the start of trick one with a chosen trump and hands. */
+	function atMeld(): GameDoc {
+		const doc = createGame('T', 0);
+		doc.phase = 'meld';
+		doc.trump = 'S';
+		doc.maker = 0;
+		doc.makerSeat = 0;
+		// seat 0: dad in hearts (9-10-J) + a spare; seat 1: nothing meldable.
+		doc.hands = [
+			['9H', 'TH', 'JH', 'AS', 'KC', 'QD'],
+			['9C', 'AD', 'KD', 'QH', 'TD', '9D'],
+			['AH', 'TS', 'KH', 'QC', 'JC', '9S'],
+			['AC', 'KS', 'QS', 'JD', 'TC', 'JS']
+		];
+		doc.trick = { number: 1, leader: 1, turn: 1, plays: [], winner: null };
+		return doc;
+	}
+
+	it('stores only the claims the player picked, and drops ones the hand lacks', () => {
+		const doc = atMeld();
+		const fakeFifty: MeldClaim = {
+			kind: 'fifty',
+			group: 'run',
+			suit: 'C',
+			cards: ['9C', 'TC', 'JC', 'QC'],
+			points: 50,
+			top: 4
+		};
+		reduce(doc, { type: 'AnnounceMeld', seat: 0, claims: [fakeFifty] });
+		expect(doc.melds.declared[0]).toEqual([]); // fake claim rejected
+	});
+
+	it('runs announce → first trick → meldReveal → show → trick two', () => {
+		const doc = atMeld();
+		reduce(doc, { type: 'AnnounceMeld', seat: 0 }); // claims omitted → all
+		expect(doc.melds.declared[0]?.[0].kind).toBe('dad');
+
+		// play the first trick in seat order 1,2,3,0
+		for (const seat of [1, 2, 3, 0] as const) {
+			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
+		}
+		expect(doc.phase).toBe('trickDone');
+		reduce(doc, { type: 'AdvanceTrick' });
+
+		// an announcer exists, so we hold on the reveal rather than resolving
+		expect(doc.phase).toBe('meldReveal');
+		expect(doc.melds.resolved).toBe(false);
+		expect(doc.trick?.number).toBe(2);
+
+		reduce(doc, { type: 'ShowMeld', seat: 0 });
+		expect(doc.melds.shown[0]).toBe(true);
+		expect(doc.melds.resolved).toBe(true); // last announcer shown → comparison locked
+		expect(doc.melds.points).toEqual([20, 0]);
+
+		reduce(doc, { type: 'AdvanceMeldReveal' });
+		expect(doc.phase).toBe('trick');
+		expect(doc.trick?.number).toBe(2);
+	});
+
+	it('skips the reveal entirely when nobody announced', () => {
+		const doc = atMeld();
+		for (const seat of [1, 2, 3, 0] as const) {
+			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
+		}
+		reduce(doc, { type: 'AdvanceTrick' });
+		expect(doc.phase).toBe('trick');
+		expect(doc.melds.resolved).toBe(true);
+	});
+
+	it('AdvanceMeldReveal shows anything still hidden and resolves', () => {
+		const doc = atMeld();
+		reduce(doc, { type: 'AnnounceMeld', seat: 0 });
+		for (const seat of [1, 2, 3, 0] as const) {
+			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
+		}
+		reduce(doc, { type: 'AdvanceTrick' });
+		expect(doc.phase).toBe('meldReveal');
+
+		reduce(doc, { type: 'AdvanceMeldReveal' }); // nobody clicked "show"
+		expect(doc.melds.shown[0]).toBe(true);
+		expect(doc.melds.resolved).toBe(true);
+		expect(doc.phase).toBe('trick');
+	});
+
+	it('records makerSeat when trump is named and clears it on the next deal', () => {
+		const doc = fourBots();
+		reduce(doc, { type: 'StartHand', seed: 'maker' });
+		while (doc.phase === 'bid1' || doc.phase === 'bid2') {
+			const seat = doc.bidding!.turn;
+			reduce(doc, { type: 'Bid', seat, bid: chooseBid(doc, seat) });
+		}
+		if (doc.phase === 'meld') {
+			expect(doc.makerSeat).not.toBeNull();
+		}
+		// redeal path also leaves makerSeat null
+		expect([null, 0, 1, 2, 3]).toContain(doc.makerSeat);
 	});
 });

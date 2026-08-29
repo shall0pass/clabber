@@ -126,6 +126,24 @@ export function selectBestMelds(claims: MeldClaim[]): MeldSelection {
 	return { list, sum };
 }
 
+/** Whether two claims describe the same combination (kind, suit and card set). */
+export function sameMeldClaim(a: MeldClaim, b: MeldClaim): boolean {
+	if (a.kind !== b.kind || a.suit !== b.suit || a.cards.length !== b.cards.length) return false;
+	const bcards = [...b.cards];
+	for (const c of a.cards) {
+		const i = bcards.indexOf(c);
+		if (i < 0) return false;
+		bcards.splice(i, 1);
+	}
+	return true;
+}
+
+/** Keep only the entries of `chosen` that match a real candidate in `available`
+ *  — so a client can't announce a meld the hand doesn't actually hold. */
+export function validateClaims(chosen: MeldClaim[], available: MeldClaim[]): MeldClaim[] {
+	return chosen.filter((c) => available.some((d) => sameMeldClaim(c, d)));
+}
+
 /** >0: `a` outranks `b`; <0: `b` outranks `a`; 0: tie — no team scores meld. */
 export function compareMeldClaim(a: MeldClaim, b: MeldClaim, trump: Suit | null): number {
 	if (a.points !== b.points) return a.points - b.points;

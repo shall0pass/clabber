@@ -14,6 +14,7 @@
 	import TrickArea from './TrickArea.svelte';
 	import BiddingPanel from './BiddingPanel.svelte';
 	import MeldPanel from './MeldPanel.svelte';
+	import MeldReveal from './MeldReveal.svelte';
 	import Scoreboard from './Scoreboard.svelte';
 	import GameOver from './GameOver.svelte';
 	import LogFeed from './LogFeed.svelte';
@@ -85,16 +86,33 @@
 	// lobby and locked for the game, so it lives on the shared doc.
 	const advanced = $derived(doc?.advanced ?? false);
 
+	// Team names relative to the local player, matching the scoreboard.
+	function teamName(team: number): string {
+		if (mySeat == null) return team === 0 ? 'Team A' : 'Team B';
+		return teamOf(mySeat) === team ? 'Your team' : 'The other team';
+	}
+
+	// Advanced mode: playing an illegal card is a renege, so make it a deliberate
+	// two-step — tap the card, then confirm.
+	let pendingRenege = $state<CardT | null>(null);
 	function play(card: CardT) {
 		if (mySeat == null) return;
 		const illegal = !myLegal.includes(card);
-		store.tryChange({
-			type: 'PlayCard',
-			seat: mySeat,
-			card,
-			...(illegal ? { allowIllegal: true } : {})
-		});
+		if (illegal && advanced) {
+			pendingRenege = card;
+			return;
+		}
+		store.tryChange({ type: 'PlayCard', seat: mySeat, card });
 	}
+	function confirmRenege() {
+		if (mySeat == null || pendingRenege == null) return;
+		store.tryChange({ type: 'PlayCard', seat: mySeat, card: pendingRenege, allowIllegal: true });
+		pendingRenege = null;
+	}
+	// Drop a half-made renege choice as soon as it stops being our turn.
+	$effect(() => {
+		if (!handActive) pendingRenege = null;
+	});
 	function nextHand() {
 		store.tryChange({ type: 'StartHand', seed: crypto.randomUUID() });
 	}
@@ -105,7 +123,7 @@
 		if (doc?.melds.resolved && doc.melds.scoredTeam != null) {
 			const t = doc.melds.scoredTeam;
 			const pts = doc.melds.points[t];
-			meldBanner = `Team ${t} scored ${pts} for meld`;
+			meldBanner = `${teamName(t)} scored ${pts} for meld`;
 			const id = setTimeout(() => (meldBanner = ''), 3500);
 			return () => clearTimeout(id);
 		}
@@ -141,6 +159,7 @@
 		if (doc.phase === 'meld' && doc.trick?.turn === mySeat) {
 			return 'Your turn: announce your meld or play a card.';
 		}
+		if (doc.phase === 'meldReveal') return 'Meld reveal: players show the meld they called.';
 		if (doc.phase === 'trick' && doc.trick?.turn === mySeat) return 'Your turn to play a card.';
 		if (doc.phase === 'trickDone' && doc.trick?.winner != null) {
 			const w = doc.trick.winner;
@@ -194,6 +213,8 @@
 								relation={relationFor(seat)}
 								side={SIDE[slot]}
 								isDealer={seat === doc.dealer}
+								isMaker={seat === doc.makerSeat}
+								trump={doc.trump}
 								isTurn={seat === currentSeat}
 								isThinking={seat === currentSeat && (doc.players[seat]?.isBot ?? false)}
 								justWon={seat === flashSeat}
@@ -249,6 +270,8 @@
 					player={doc.players[mySeat]}
 					relation="you"
 					isDealer={mySeat === doc.dealer}
+					isMaker={mySeat === doc.makerSeat}
+					trump={doc.trump}
 					isTurn={mySeat === currentSeat}
 					isThinking={false}
 					justWon={mySeat === flashSeat}
@@ -260,6 +283,31 @@
 					<p class="text-center text-xs text-red-300">
 						Advanced: any card is playable — an illegal one is a renege.
 					</p>
+				{/if}
+				{#if pendingRenege}
+					<div
+						class="flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/50"
+					>
+						<p class="text-sm text-red-100">
+							<span class="font-semibold">{pendingRenege}</span> breaks the follow rules. Play it
+							anyway? That's a renege — {teamName(mySeat != null ? teamOf(mySeat) ^ 1 : 1)} scores 162
+							plus their meld and the hand ends.
+						</p>
+						<div class="flex gap-2">
+							<button
+								onclick={() => (pendingRenege = null)}
+								class="rounded-lg bg-white/10 px-4 py-1.5 text-sm font-semibold hover:bg-white/20"
+							>
+								Cancel
+							</button>
+							<button
+								onclick={confirmRenege}
+								class="rounded-lg bg-red-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-400"
+							>
+								Renege
+							</button>
+						</div>
+					</div>
 				{/if}
 				<MyHand
 					cards={myHand}
@@ -282,12 +330,13 @@
 			</span>
 		{/if}
 
-		<LogFeed log={doc.log} players={doc.players} />
+		<LogFeed log={doc.log} players={doc.players} {mySeat} />
 	</div>
 
 	<!-- Outside the .lost filter so the fixed overlays position against the
 	     viewport and the fireworks/tears keep their colour. -->
 	<GameOver {store} />
+	<MeldReveal {store} />
 	{#if doc.training}
 		<CoachPanel {store} />
 	{/if}

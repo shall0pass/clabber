@@ -1,11 +1,14 @@
 <script lang="ts">
-	import type { PlayerSlot } from '$lib/clabber/types';
+	import type { PlayerSlot, Suit } from '$lib/clabber/types';
+	import { SUIT_SYMBOL, isRedSuit } from '$lib/cards/display';
 
 	let {
 		player = null,
 		relation = 'opponent',
 		side = 'top',
 		isDealer = false,
+		isMaker = false,
+		trump = null,
 		isTurn = false,
 		isThinking = false,
 		justWon = false,
@@ -18,6 +21,10 @@
 		/** which edge of the table this plate sits on */
 		side?: 'top' | 'bottom' | 'left' | 'right';
 		isDealer?: boolean;
+		/** this seat named trump this hand */
+		isMaker?: boolean;
+		/** the trump suit, for the "made" chip symbol */
+		trump?: Suit | null;
 		isTurn?: boolean;
 		isThinking?: boolean;
 		/** briefly true right after this player takes a trick */
@@ -69,9 +76,21 @@
 
 		{#if isDealer}
 			<span
-				class="rounded bg-white/15 px-1 text-[10px] font-bold tracking-wide text-white/70"
-				title="dealer">D</span
+				class="shrink-0 rounded-full bg-amber-400 px-1.5 text-[10px] font-extrabold tracking-wide text-green-950"
+				title="dealer">DEAL</span
 			>
+		{/if}
+
+		{#if isMaker}
+			<span
+				class="flex shrink-0 items-center gap-0.5 rounded-full bg-white px-1.5 text-[10px] font-extrabold tracking-wide text-green-950"
+				title="named trump"
+			>
+				MADE
+				{#if trump}
+					<span class={isRedSuit(trump) ? 'text-red-600' : 'text-black'}>{SUIT_SYMBOL[trump]}</span>
+				{/if}
+			</span>
 		{/if}
 
 		{#if isThinking}
