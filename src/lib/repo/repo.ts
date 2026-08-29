@@ -7,6 +7,20 @@ import { WebSocketClientAdapter } from '@automerge/automerge-repo-network-websoc
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
 import { PUBLIC_SYNC_URL } from '$env/static/public';
 
+/** Short join codes need the same-origin `/games/:code` registry (Vite proxy in
+ *  dev, an nginx proxy in Docker, a Pages Function in prod). The public
+ *  Automerge relay has no such registry, so a build pointed at it can only
+ *  share games by invite link — the "secret code" box is hidden in that case. */
+export const JOIN_CODES_SUPPORTED = !/(^|\.)sync\.automerge\.org$/.test(
+	(() => {
+		try {
+			return new URL(PUBLIC_SYNC_URL).hostname;
+		} catch {
+			return '';
+		}
+	})()
+);
+
 let repo: RepoType | undefined;
 
 export function getRepo(): RepoType {

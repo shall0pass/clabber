@@ -34,6 +34,20 @@ export function asDocumentUrl(input: string): string | null {
 	return m ? `automerge:${m[1]}` : null;
 }
 
+/** Whether a same-origin join-code registry is actually answering. A live
+ *  registry replies `404` (JSON) for an unknown code; with none, the SPA
+ *  fallback serves `index.html` (`200`, HTML). Lets the UI hide the "secret
+ *  code" box on a deploy that can only share games by invite link. */
+export async function registryAvailable(): Promise<boolean> {
+	try {
+		const res = await fetch(`/games/__probe_${Math.random().toString(36).slice(2, 10)}`);
+		if (res.status === 404) return true;
+		return (res.headers.get('content-type') ?? '').includes('json');
+	} catch {
+		return false;
+	}
+}
+
 /** The document url for a code (or a pasted url / id), or `null` if unknown. */
 export async function resolveCode(codeOrUrl: string): Promise<string | null> {
 	const direct = asDocumentUrl(codeOrUrl);

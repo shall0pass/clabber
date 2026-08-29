@@ -76,8 +76,12 @@ ignore it.
 
 Skip this and games are shared by **invite link** — "Start a new game" shows a
 _Copy invite link_ button; anyone who opens the link joins. The link carries
-the Automerge document id in its `#fragment`. Pasting that id into the code box
-also works.
+the Automerge document id in its `#fragment`.
+
+When no registry is reachable (public relay, no KV binding) the login screen
+**hides the "secret code" box entirely** — it probes `/games/:code` on load and
+only shows the box if a real registry answers — so players just see "Start a new
+game" and share the link. Add the KV namespace below and the box comes back.
 
 To get the friendly 5-character codes instead, add a KV namespace for the
 `functions/games/[code].js` Function:
