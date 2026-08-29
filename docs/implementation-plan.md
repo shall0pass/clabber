@@ -728,3 +728,23 @@ Table chat _is_ built: `doc.chat` (a `ChatMessage[]` capped at the most recent
 100, appended via the `SendChat` action), rendered by `ChatBox.svelte` — a
 fixed bottom-right panel present in both the lobby and the game, with an unread
 badge and names tinted by the reader's own side.
+
+## 14. PWA
+
+The app is an installable PWA named **Clabber**:
+
+- `static/manifest.webmanifest` — standalone display, `#0a5c36` theme, linked
+  from `src/app.html` along with the iOS `apple-touch-icon` / status-bar meta.
+- Icons are an Ace-of-Spades card on green felt. `static/icon.svg` is the
+  master; `npm run icons` (`scripts/gen-icons.mjs`, uses `sharp`) rasterises it
+  to `static/pwa-{192,512}.png`, `pwa-maskable-{192,512}.png`,
+  `apple-touch-icon.png` and `favicon.png`. The card sits inside the maskable
+  safe zone. Re-run only when the artwork changes; the PNGs are committed.
+- `src/service-worker.ts` — SvelteKit auto-registers it. Precaches the build +
+  static files; cache-first for versioned assets, network-first with a cache /
+  app-shell fallback for everything else. It ignores cross-origin requests, so
+  the sync-server WebSocket is untouched. Live multiplayer still needs the
+  network; only the shell works offline.
+- `docker/nginx.conf` serves `service-worker.js` / `manifest.webmanifest` with
+  `Cache-Control: no-cache` and the icons with a 7-day TTL. Cloudflare Pages
+  serves the static output as-is.
