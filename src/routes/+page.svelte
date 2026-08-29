@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { dev } from '$app/environment';
+	import { pickBotNames } from '$lib/clabber';
 	import JoinScreen from '$lib/components/JoinScreen.svelte';
 	import Lobby from '$lib/components/Lobby.svelte';
 	import Table from '$lib/components/Table.svelte';
@@ -51,6 +52,28 @@
 		}
 	}
 
+	/** Leave the table: hand our seat to a bot, tear down the live connections
+	 *  and drop back to the join screen. */
+	function leave() {
+		const seat = store?.mySeat ?? null;
+		if (store && seat != null) {
+			const others = (store.doc?.players ?? [])
+				.filter((p, i) => p != null && i !== seat)
+				.map((p) => p!.name);
+			store.tryChange({ type: 'LeaveTable', seat, botName: pickBotNames(1, others)[0] });
+		}
+		host?.stop();
+		presence?.stop();
+		host = undefined;
+		presence = undefined;
+		store = undefined;
+		bootError = '';
+		booting = false;
+		if (dev) delete (globalThis as Record<string, unknown>).__clabber;
+		// Drop the #code so a reload starts fresh at the join screen.
+		history.replaceState(null, '', location.pathname + location.search);
+	}
+
 	onMount(() => {
 		online = navigator.onLine;
 		const setOn = () => (online = true);
@@ -95,9 +118,9 @@
 	<div class="grid min-h-screen place-items-center bg-green-900 text-white/70">joining…</div>
 {:else if store && presence && host}
 	{#if phase === 'lobby'}
-		<Lobby {store} {presence} />
+		<Lobby {store} {presence} onleave={leave} />
 	{:else}
-		<Table {store} {presence} {host} />
+		<Table {store} {presence} {host} onleave={leave} />
 	{/if}
 	<ChatBox {store} />
 {:else}

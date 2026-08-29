@@ -4,8 +4,10 @@
 	import type { GameStore } from '$lib/repo/gameStore.svelte';
 	import type { Presence } from '$lib/repo/presence.svelte';
 	import SeatSlot from './Seat.svelte';
+	import LeaveButton from './LeaveButton.svelte';
 
-	let { store, presence }: { store: GameStore; presence: Presence } = $props();
+	let { store, presence, onleave }: { store: GameStore; presence: Presence; onleave: () => void } =
+		$props();
 
 	const NAME_KEY = 'clabber:name';
 	let preferredName = $state(readName());
@@ -88,7 +90,11 @@
 	}
 </script>
 
-<div class="flex min-h-screen flex-col items-center gap-6 bg-green-900 p-6 text-white">
+<div class="relative flex min-h-screen flex-col items-center gap-6 bg-green-900 p-6 text-white">
+	<div class="absolute top-4 left-4">
+		<LeaveButton {onleave} />
+	</div>
+
 	<header class="flex flex-col items-center gap-1">
 		<h1 class="text-xl font-bold tracking-wide">Clabber lobby</h1>
 		{#if store.code && store.code.length <= 8}

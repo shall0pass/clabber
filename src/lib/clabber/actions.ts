@@ -29,6 +29,10 @@ export type Action =
 	| { type: 'CoverSeat'; seat: Seat; isBot: boolean }
 	/** After a game ends: back to the lobby, keeping seats, names and the code. */
 	| { type: 'ResetToLobby' }
+	/** A human walks away for good: their seat becomes a bot (named `botName`)
+	 *  and loses its `actorId`, so a later re-join won't reclaim it. Works in
+	 *  any phase — a hand in progress is played out by the bot. */
+	| { type: 'LeaveTable'; seat: Seat; botName: string }
 	/** Post a message to the table chat. `id` / `ts` are supplied by the caller
 	 *  so the reducer stays pure. */
 	| {

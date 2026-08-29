@@ -17,8 +17,14 @@
 	import Scoreboard from './Scoreboard.svelte';
 	import GameOver from './GameOver.svelte';
 	import LogFeed from './LogFeed.svelte';
+	import LeaveButton from './LeaveButton.svelte';
 
-	let { store, presence, host }: { store: GameStore; presence: Presence; host: Host } = $props();
+	let {
+		store,
+		presence,
+		host,
+		onleave
+	}: { store: GameStore; presence: Presence; host: Host; onleave: () => void } = $props();
 
 	const doc = $derived(store.doc);
 	const mySeat = $derived(store.mySeat);
@@ -160,8 +166,11 @@
 		<div class="absolute top-3 right-3 z-20">
 			<Scoreboard {store} onNextHand={nextHand} />
 		</div>
-		<div class="absolute top-3 left-3 z-10 text-[11px] text-white/35">
-			{#if host.isHost}running the computer players{/if}
+		<div class="absolute top-3 left-3 z-10 flex flex-col items-start gap-1">
+			<LeaveButton {onleave} />
+			{#if host.isHost}
+				<span class="text-[11px] text-white/35">running the computer players</span>
+			{/if}
 		</div>
 
 		<div class="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>

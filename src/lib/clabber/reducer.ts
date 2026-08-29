@@ -56,9 +56,25 @@ export function reduce(doc: GameDoc, action: Action): void {
 		}
 		case 'ResetToLobby':
 			return resetToLobby(doc);
+		case 'LeaveTable':
+			return leaveTable(doc, action);
 		case 'SendChat':
 			return sendChat(doc, action);
 	}
+}
+
+function leaveTable(doc: GameDoc, a: Extract<Action, { type: 'LeaveTable' }>): void {
+	if (!doc.players[a.seat]) return;
+	const name = a.botName.trim() || `Bot ${a.seat + 1}`;
+	// Replace the human with a bot; drop actorId so a fresh join can't re-seat.
+	doc.players[a.seat] = {
+		seat: a.seat,
+		name,
+		isBot: true,
+		botName: name,
+		lastSeen: doc.createdAt
+	};
+	doc.log.push(`seat ${a.seat} left; ${name} takes over`);
 }
 
 /** Newest-first cap so the chat can't grow the document without bound. */

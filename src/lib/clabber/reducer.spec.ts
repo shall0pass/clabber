@@ -120,6 +120,27 @@ describe('ResetToLobby', () => {
 	});
 });
 
+describe('LeaveTable', () => {
+	it('turns a human seat into a named bot and drops its actorId, in any phase', () => {
+		const doc = fourBots();
+		reduce(doc, { type: 'JoinSeat', seat: 2, name: 'Ada', actorId: 'ada-1' });
+		reduce(doc, { type: 'StartHand', seed: 'lt' });
+
+		reduce(doc, { type: 'LeaveTable', seat: 2, botName: 'Rainbow Goose' });
+
+		expect(doc.players[2]).toMatchObject({ isBot: true, name: 'Rainbow Goose' });
+		expect(doc.players[2]?.actorId).toBeUndefined();
+		// the hand in progress is untouched
+		expect(['bid1', 'bid2']).toContain(doc.phase);
+	});
+
+	it('is a no-op on an empty seat', () => {
+		const doc = createGame('T', 0);
+		reduce(doc, { type: 'LeaveTable', seat: 1, botName: 'Nobody' });
+		expect(doc.players[1]).toBeNull();
+	});
+});
+
 describe('SendChat', () => {
 	function chat(doc: GameDoc, text: string) {
 		reduce(doc, {
