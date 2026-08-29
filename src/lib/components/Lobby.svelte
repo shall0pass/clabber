@@ -34,6 +34,7 @@
 	const filled = $derived(players.every((p) => p != null));
 	const hasHuman = $derived(players.some((p) => p != null && !p.isBot));
 	const advanced = $derived(doc?.advanced ?? false);
+	const training = $derived(doc?.training ?? false);
 
 	// slot 0 bottom, 1 left, 2 top, 3 right — rotated so my seat is at the bottom.
 	const slotClass = ['area-bottom', 'area-left', 'area-top', 'area-right'];
@@ -76,6 +77,9 @@
 	}
 	function toggleAdvanced() {
 		store.change({ type: 'SetAdvanced', on: !advanced });
+	}
+	function toggleTraining() {
+		store.change({ type: 'SetTraining', on: !training });
 	}
 
 	let copied = $state(false);
@@ -176,6 +180,24 @@
 			<span class="mt-0.5 block text-white/50">
 				Players may play any card. An illegal one is a renege — the other team takes 162 plus their
 				meld. Set this before the deal; it's locked once the game starts.
+			</span>
+		</span>
+	</label>
+
+	<label
+		class="flex max-w-sm cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-4 py-3 text-sm ring-1 ring-white/10"
+	>
+		<input
+			type="checkbox"
+			class="mt-0.5 h-4 w-4 accent-amber-400"
+			checked={training}
+			onchange={toggleTraining}
+		/>
+		<span>
+			<span class="font-semibold">Training coach</span>
+			<span class="mt-0.5 block text-white/50">
+				Adds a “Learn” button at the table. Each player can open it for plain-language help about
+				the up-card, meld, and whose-turn / follow-suit rules for whatever's on the table right now.
 			</span>
 		</span>
 	</label>

@@ -36,6 +36,9 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return setBot(doc, action);
 		case 'SetAdvanced':
 			return setAdvanced(doc, action);
+		case 'SetTraining':
+			doc.training = action.on;
+			return;
 		case 'StartHand':
 			return startHand(doc, action);
 		case 'Bid':

@@ -194,6 +194,24 @@ describe('SetAdvanced', () => {
 	});
 });
 
+describe('SetTraining', () => {
+	it('toggles the flag', () => {
+		const doc = createGame('T', 0);
+		expect(doc.training).toBe(false);
+		reduce(doc, { type: 'SetTraining', on: true });
+		expect(doc.training).toBe(true);
+		reduce(doc, { type: 'SetTraining', on: false });
+		expect(doc.training).toBe(false);
+	});
+
+	it('can still be toggled mid-game (it is only a UI aid)', () => {
+		const doc = fourBots();
+		reduce(doc, { type: 'StartHand', seed: 'coach' });
+		expect(() => reduce(doc, { type: 'SetTraining', on: true })).not.toThrow();
+		expect(doc.training).toBe(true);
+	});
+});
+
 describe('renege (Advanced mode)', () => {
 	// Hearts led; seat 1 holds hearts, so QS / AD are illegal for it.
 	function midTrick(): GameDoc {

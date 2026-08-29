@@ -6,6 +6,7 @@ export * from './rng';
 export * from './deal';
 export * from './state';
 export * from './bidding';
+export * from './coach';
 export * from './meld';
 export * from './play';
 export * from './score';

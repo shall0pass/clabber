@@ -18,6 +18,7 @@
 	import GameOver from './GameOver.svelte';
 	import LogFeed from './LogFeed.svelte';
 	import LeaveButton from './LeaveButton.svelte';
+	import CoachPanel from './CoachPanel.svelte';
 
 	let {
 		store,
@@ -287,6 +288,9 @@
 	<!-- Outside the .lost filter so the fixed overlays position against the
 	     viewport and the fireworks/tears keep their colour. -->
 	<GameOver {store} />
+	{#if doc.training}
+		<CoachPanel {store} />
+	{/if}
 {/if}
 
 <style>

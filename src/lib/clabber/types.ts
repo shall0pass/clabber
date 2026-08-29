@@ -125,6 +125,10 @@ export interface GameDoc {
 	/** Advanced (renege) mode — chosen in the lobby, then locked for the game.
 	 *  When on, a player may play any card in hand; an illegal one is a renege. */
 	advanced: boolean;
+	/** Training mode — a lobby toggle that offers every player a "coach" panel at
+	 *  the table explaining the rules for whatever is on the table right now.
+	 *  Purely a learning aid, so it can be switched on or off at any time. */
+	training: boolean;
 	dealer: Seat;
 	/** Seed of the current deal (kept for replay / debugging). */
 	seed: string;
