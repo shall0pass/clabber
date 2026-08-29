@@ -79,7 +79,7 @@
 						if (e.key === 'Enter') commit();
 						if (e.key === 'Escape') editing = false;
 					}}
-					class="w-24 rounded bg-white/15 px-1.5 py-0.5 text-sm focus:ring-2 focus:ring-green-400 focus:outline-none"
+					class="w-24 rounded bg-white/15 px-1.5 py-0.5 text-sm text-white focus:ring-2 focus:ring-green-400 focus:outline-none"
 				/>
 			{:else}
 				<span class="max-w-[7rem] truncate text-sm font-semibold" title={player.name}>

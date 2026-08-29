@@ -53,7 +53,7 @@
 				autocomplete="off"
 				autocapitalize="characters"
 				spellcheck="false"
-				class="w-full rounded-lg border-0 bg-white/10 px-4 py-3 text-center text-lg font-semibold tracking-[0.3em] uppercase placeholder:tracking-normal placeholder:text-white/30 focus:ring-2 focus:ring-green-400 focus:outline-none"
+				class="w-full rounded-lg border-0 bg-white/10 px-4 py-3 text-center text-lg font-semibold tracking-[0.3em] text-white uppercase placeholder:tracking-normal placeholder:text-white/30 focus:ring-2 focus:ring-green-400 focus:outline-none"
 			/>
 			<button
 				type="submit"

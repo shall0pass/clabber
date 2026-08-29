@@ -23,7 +23,8 @@
 	let open = $state(false);
 	let text = $state('');
 	let list = $state<HTMLDivElement>();
-	let lastReadTs = $state(0);
+	// Only messages that arrive after this tab loads count as "new".
+	let lastReadTs = $state(Date.now());
 
 	const unread = $derived(
 		open ? 0 : messages.filter((m) => m.ts > lastReadTs && m.from !== store.clientId).length
@@ -126,7 +127,7 @@
 					placeholder="Message…"
 					aria-label="Chat message"
 					autocomplete="off"
-					class="min-w-0 flex-1 rounded-lg bg-white/10 px-3 py-1.5 text-sm placeholder:text-white/30 focus:ring-2 focus:ring-green-400 focus:outline-none"
+					class="min-w-0 flex-1 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-white/30 focus:ring-2 focus:ring-green-400 focus:outline-none"
 				/>
 				<button
 					type="submit"
@@ -141,15 +142,18 @@
 
 	<button
 		onclick={toggle}
-		class="relative rounded-full bg-green-950/85 px-4 py-2 text-sm font-semibold text-white/80 ring-1 ring-white/15 hover:text-white"
+		class="relative rounded-full px-4 py-2 text-sm font-semibold ring-1 transition {unread > 0
+			? 'bg-green-500 text-green-950 ring-green-300'
+			: 'bg-green-950/85 text-white/80 ring-white/15 hover:text-white'}"
 		aria-expanded={open}
 	>
-		💬 Chat
+		💬 Chat{unread > 0 ? ` · ${unread > 9 ? '9+' : unread} new` : ''}
 		{#if unread > 0}
-			<span
-				class="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white"
-			>
-				{unread > 9 ? '9+' : unread}
+			<span class="absolute -top-1 -right-1 flex h-3.5 w-3.5" aria-hidden="true">
+				<span
+					class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75 motion-reduce:animate-none"
+				></span>
+				<span class="relative inline-flex h-3.5 w-3.5 rounded-full bg-red-500"></span>
 			</span>
 		{/if}
 	</button>
