@@ -16,7 +16,8 @@
 		legal?: CardT[];
 		/** whether it is this player's turn to play a card */
 		active?: boolean;
-		/** Advanced mode: every card in hand is playable (an illegal one reneges) */
+		/** Advanced mode: every card in hand is playable (an illegal one can be
+		 *  called as a renege by the other team) */
 		advanced?: boolean;
 		height?: number;
 		onplay?: (card: CardT) => void;
@@ -28,9 +29,6 @@
 
 	function playable(c: CardT) {
 		return active && (advanced || legalSet.has(c));
-	}
-	function reneging(c: CardT) {
-		return active && advanced && !legalSet.has(c);
 	}
 
 	let container = $state<HTMLDivElement>();
@@ -132,16 +130,15 @@
 					? 'cursor-not-allowed opacity-40'
 					: 'cursor-default'}
 				{activeIdx === i && playable(card)
-				? `z-10 -translate-y-6! ring-2 ${reneging(card) ? 'ring-red-400' : 'ring-amber-300'}`
+				? 'z-10 -translate-y-6! ring-2 ring-amber-300'
 				: activeIdx === i
 					? 'ring-2 ring-white/40'
 					: ''}
-				{activeIdx != null && activeIdx !== i && playable(card) ? 'opacity-60' : ''}
-				{reneging(card) && activeIdx !== i ? 'ring-2 ring-red-500/70' : ''}"
+				{activeIdx != null && activeIdx !== i && playable(card) ? 'opacity-60' : ''}"
 			style:left="{i * step}px"
 			tabindex={playable(card) ? 0 : -1}
 			aria-disabled={!playable(card)}
-			aria-label={reneging(card) ? `${card} (renege)` : card}
+			aria-label={card}
 			onclick={() => clickCard(card)}
 		>
 			<Card {card} {height} />
