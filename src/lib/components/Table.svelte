@@ -289,12 +289,6 @@
 					lastBid={lastBid(mySeat)}
 					tricks={teamTricks(mySeat)}
 				/>
-				{#if advanced && handActive}
-					<p class="text-center text-xs text-red-300">
-						Advanced: any card is playable — an illegal one only costs you if the other team calls
-						it.
-					</p>
-				{/if}
 				{#if mayCallRenege && !pendingCall}
 					<button
 						onclick={() => (pendingCall = true)}
