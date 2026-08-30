@@ -9,10 +9,10 @@
 import { SUIT_NAME, cardName, cardTag } from '$lib/cards/display';
 import { legalBids } from './bidding';
 import { cardPoints, suitOf, trickWinner } from './cards';
-import { detectMelds, selectBestMelds } from './meld';
+import { selectBestMelds } from './meld';
 import { legalMoves } from './play';
 import { partnerSeat, teamOf } from './state';
-import type { GameDoc, MeldKind, Seat, Suit } from './types';
+import type { GameDoc, Seat, Suit } from './types';
 
 export interface CoachSection {
 	title: string;
@@ -20,14 +20,6 @@ export interface CoachSection {
 }
 
 type Who = (seat: Seat, cap?: boolean) => string;
-
-const KIND_LABEL: Record<MeldKind, string> = {
-	dad: 'Dad (run of three)',
-	fifty: 'Fifty (run of four)',
-	hundred: 'Hundred (run of five, or four of a kind)',
-	twohundred: 'Two hundred (all four Jacks)',
-	bella: 'Bella (King + Queen of trump)'
-};
 
 /** Sections of rules help for the current table state, most relevant first. The
  *  last section is always a fixed ranking / scoring reference. */
@@ -178,33 +170,19 @@ function bidRoundTwo(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection 
 
 function meldSection(doc: GameDoc, mySeat: Seat | null): CoachSection {
 	const points: string[] = [
-		'Meld is a scoring combination sitting in your hand: a run of 3 / 4 / 5 cards in one suit (20 / 50 / 100), four of a kind (100, or 200 for the four Jacks), or the King and Queen of trump — “Bella”, worth 20.',
+		'Meld is a scoring combination in your hand: a run of 3 / 4 / 5 cards in one suit (20 / 50 / 100), four of a kind (100, or 200 for the four Jacks), or the King and Queen of trump — “Bella”, worth 20.',
 		'Runs use the order 9 10 J Q K A and ignore which suit is trump.',
 		'Only the team with the single best meld scores — but that team then scores every meld it holds. Bella always scores for whoever has it.',
-		'Announce before you play your first card to trick one, or the meld is lost for this hand.'
+		'You have to spot your own meld. Tap “Declare meld”, pick the exact cards that form one, and confirm — repeat for each meld you hold.',
+		'Declare before you play your first card to trick one, or the meld is lost for this hand.'
 	];
 
-	if (mySeat != null) {
-		const best = selectBestMelds(detectMelds(doc.hands[mySeat], doc.trump));
-		if (best.list.length) {
-			const names = best.list.map(
-				(c) =>
-					`${KIND_LABEL[c.kind]}${c.suit ? ` in ${SUIT_NAME[c.suit]}` : ''} — ${c.cards
-						.map(cardTag)
-						.join(' ')} (${c.points})`
-			);
-			points.push(`In your hand: ${names.join('; ')}. Announcing all of it is worth ${best.sum}.`);
-			points.push(
-				doc.melds.declared[mySeat] != null
-					? 'You have already announced this hand.'
-					: 'Tick the melds you want to call, then tap “Announce” before you play. Leave a box unticked to keep that one quiet.'
-			);
-		} else {
-			points.push('You have no meld this hand — just play when it’s your turn.');
-		}
+	if (mySeat != null && (doc.melds.declared[mySeat]?.length ?? 0) > 0) {
+		const sum = selectBestMelds(doc.melds.declared[mySeat] ?? []).sum;
+		points.push(`So far you’ve declared ${doc.melds.declared[mySeat]!.length} meld worth ${sum}.`);
 	}
 
-	return { title: 'Meld — call it before you play', points };
+	return { title: 'Meld — declare it before you play', points };
 }
 
 function meldRevealSection(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection {

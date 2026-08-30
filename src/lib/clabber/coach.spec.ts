@@ -47,7 +47,7 @@ describe('coachSections', () => {
 		const doc = dealToMeld();
 		const seat = doc.trick!.turn;
 		const titles = coachSections(doc, seat).map((s) => s.title);
-		expect(titles).toContain('Meld — call it before you play');
+		expect(titles).toContain('Meld — declare it before you play');
 		expect(titles).toContain('The first trick');
 		expect(titles.at(-1)).toBe('Card ranking & scoring');
 	});

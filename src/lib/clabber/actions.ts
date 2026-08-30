@@ -18,9 +18,14 @@ export type Action =
 	| { type: 'StartHand'; seed: string }
 	| { type: 'Bid'; seat: Seat; bid: Bid }
 	/** Announce meld before playing the first trick. `claims` is the subset of
-	 *  the seat's holdable melds the player chose to call; omit it to claim every
-	 *  meld the hand contains (bots and older callers). */
+	 *  the seat's holdable melds the caller chose; omit it to claim every meld
+	 *  the hand contains. Used by the bot runner — human players declare each
+	 *  meld by hand with `DeclareMeld`. */
 	| { type: 'AnnounceMeld'; seat: Seat; claims?: MeldClaim[] }
+	/** Declare one meld by naming the exact cards that form it (a human picking
+	 *  cards from their hand). The reducer classifies the selection; anything
+	 *  that isn't a real meld is rejected. Repeatable — one call per meld. */
+	| { type: 'DeclareMeld'; seat: Seat; cards: Card[] }
 	/** Show an announced meld to the table during the `meldReveal` step. */
 	| { type: 'ShowMeld'; seat: Seat }
 	/** Leave `meldReveal` for trick two. The host fires this after a pause; a

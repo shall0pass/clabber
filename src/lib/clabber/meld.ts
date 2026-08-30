@@ -126,6 +126,73 @@ export function selectBestMelds(claims: MeldClaim[]): MeldSelection {
 	return { list, sum };
 }
 
+/** Classify an exact hand-picked set of cards as a single meld, or `null` if
+ *  the selection is not a valid meld. Used when a player declares meld by
+ *  choosing the cards themselves (no auto-detection).
+ *
+ *    2 cards  K + Q of trump ....................... bella (20)
+ *    4 cards  four of a kind ...... 200 for jacks, else hundred (100)
+ *    3-6 same-suit cards in sequence 9 10 J Q K A ... dad 20 / fifty 50 / hundred 100
+ */
+export function classifyMeld(cards: readonly Card[], trump: Suit | null): MeldClaim | null {
+	const uniq = new Set(cards);
+	if (uniq.size !== cards.length || cards.length < 2) return null;
+	const n = cards.length;
+
+	// Bella — exactly the king and queen of trump.
+	if (n === 2) {
+		if (!trump) return null;
+		const k = `K${trump}` as Card;
+		const q = `Q${trump}` as Card;
+		if (uniq.has(k) && uniq.has(q)) {
+			return {
+				kind: 'bella',
+				group: 'bella',
+				suit: trump,
+				cards: [k, q],
+				points: 20,
+				top: sequenceStrength(k)
+			};
+		}
+		return null;
+	}
+
+	// Four of a kind.
+	if (n === 4 && cards.every((c) => rankOf(c) === rankOf(cards[0]))) {
+		const isJacks = rankOf(cards[0]) === 'J';
+		return {
+			kind: isJacks ? 'twohundred' : 'hundred',
+			group: 'set',
+			suit: null,
+			cards: [...cards],
+			points: isJacks ? 200 : 100,
+			top: sequenceStrength(cards[0])
+		};
+	}
+
+	// Sequence in one suit.
+	if (n <= 6 && cards.every((c) => suitOf(c) === suitOf(cards[0]))) {
+		const run = [...cards].sort((a, b) => sequenceStrength(a) - sequenceStrength(b));
+		const consecutive = run.every(
+			(c, i) => i === 0 || sequenceStrength(c) === sequenceStrength(run[i - 1]) + 1
+		);
+		if (consecutive) {
+			const kind = n >= 5 ? 'hundred' : n === 4 ? 'fifty' : 'dad';
+			const points = n >= 5 ? 100 : n === 4 ? 50 : 20;
+			return {
+				kind,
+				group: 'run',
+				suit: suitOf(run[0]),
+				cards: run,
+				points,
+				top: sequenceStrength(run[run.length - 1])
+			};
+		}
+	}
+
+	return null;
+}
+
 /** Whether two claims describe the same combination (kind, suit and card set). */
 export function sameMeldClaim(a: MeldClaim, b: MeldClaim): boolean {
 	if (a.kind !== b.kind || a.suit !== b.suit || a.cards.length !== b.cards.length) return false;

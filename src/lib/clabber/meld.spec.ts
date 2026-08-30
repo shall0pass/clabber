@@ -1,9 +1,55 @@
 import { describe, it, expect } from 'vitest';
-import { compareMeldClaim, detectMelds, resolveMeld, selectBestMelds } from './meld';
+import { classifyMeld, compareMeldClaim, detectMelds, resolveMeld, selectBestMelds } from './meld';
 import { createGame } from './state';
 import type { Card, GameDoc, MeldClaim, Suit } from './types';
 
 const kinds = (claims: MeldClaim[]) => claims.map((c) => c.kind).sort();
+
+describe('classifyMeld', () => {
+	it('classifies a hand-picked three-card run as a dad', () => {
+		expect(classifyMeld(['JH', '9H', 'TH'], 'S')).toMatchObject({
+			kind: 'dad',
+			group: 'run',
+			suit: 'H',
+			points: 20
+		});
+	});
+
+	it('classifies four and five card runs', () => {
+		expect(classifyMeld(['9H', 'TH', 'JH', 'QH'], 'S')).toMatchObject({
+			kind: 'fifty',
+			points: 50
+		});
+		expect(classifyMeld(['9H', 'TH', 'JH', 'QH', 'KH'], 'S')).toMatchObject({
+			kind: 'hundred',
+			points: 100
+		});
+	});
+
+	it('classifies four of a kind, with 200 for jacks', () => {
+		expect(classifyMeld(['9S', '9H', '9D', '9C'], 'S')).toMatchObject({
+			kind: 'hundred',
+			points: 100
+		});
+		expect(classifyMeld(['JS', 'JH', 'JD', 'JC'], 'S')).toMatchObject({
+			kind: 'twohundred',
+			points: 200
+		});
+	});
+
+	it('classifies king + queen of trump as bella', () => {
+		expect(classifyMeld(['KS', 'QS'], 'S')).toMatchObject({ kind: 'bella', points: 20 });
+		expect(classifyMeld(['KH', 'QH'], 'S')).toBeNull(); // not trump
+	});
+
+	it('rejects gaps, mixed suits, duplicates and odd sizes', () => {
+		expect(classifyMeld(['9H', 'JH', 'QH'], 'S')).toBeNull(); // gap at 10
+		expect(classifyMeld(['9H', 'TH', 'JS'], 'S')).toBeNull(); // mixed suit
+		expect(classifyMeld(['9H', '9H', 'TH'], 'S')).toBeNull(); // duplicate card
+		expect(classifyMeld(['9H', 'TH'], 'S')).toBeNull(); // two cards, not bella
+		expect(classifyMeld(['9S', '9H', '9D'], 'S')).toBeNull(); // only three of a kind
+	});
+});
 
 describe('detectMelds', () => {
 	it('finds a three-card sequence (dad)', () => {

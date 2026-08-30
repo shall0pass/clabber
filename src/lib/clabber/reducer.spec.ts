@@ -373,6 +373,54 @@ describe('manual meld announce + show', () => {
 		expect(doc.melds.declared[0]).toEqual([]); // fake claim rejected
 	});
 
+	describe('DeclareMeld (hand-picked cards)', () => {
+		it('classifies a picked set of cards and appends it', () => {
+			const doc = atMeld();
+			reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['9H', 'TH', 'JH'] });
+			expect(doc.melds.declared[0]).toMatchObject([{ kind: 'dad', suit: 'H', points: 20 }]);
+		});
+
+		it('rejects cards that are not a real meld', () => {
+			const doc = atMeld();
+			expect(() =>
+				reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['9H', 'JH', 'AS'] })
+			).toThrow(RuleError);
+			expect(doc.melds.declared[0]).toBeNull();
+		});
+
+		it('rejects a card the seat does not hold', () => {
+			const doc = atMeld();
+			expect(() =>
+				reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['9C', 'TC', 'JC'] })
+			).toThrow(RuleError);
+		});
+
+		it('rejects a card already used in another of that seat’s melds', () => {
+			const doc = atMeld();
+			doc.hands[0] = ['9H', 'TH', 'JH', 'QH', 'KH', 'AS'];
+			reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['9H', 'TH', 'JH'] });
+			expect(() =>
+				reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['JH', 'QH', 'KH'] })
+			).toThrow(RuleError);
+		});
+
+		it('lets bella overlap a sequence in the trump suit', () => {
+			const doc = atMeld();
+			doc.hands[2] = ['JS', 'QS', 'KS', 'AS', '9H', '9D']; // seat 2, trump S
+			reduce(doc, { type: 'DeclareMeld', seat: 2, cards: ['JS', 'QS', 'KS', 'AS'] }); // fifty
+			reduce(doc, { type: 'DeclareMeld', seat: 2, cards: ['KS', 'QS'] }); // bella, shares K/Q
+			expect(doc.melds.declared[2]?.map((m) => m.kind)).toEqual(['fifty', 'bella']);
+		});
+
+		it('will not declare once the seat has played to trick one', () => {
+			const doc = atMeld();
+			reduce(doc, { type: 'PlayCard', seat: 1, card: doc.hands[1][0] }); // seat 1 leads
+			expect(doc.phase).toBe('meld');
+			const still = doc.hands[1].slice(0, 3);
+			expect(() => reduce(doc, { type: 'DeclareMeld', seat: 1, cards: still })).toThrow(RuleError);
+		});
+	});
+
 	it('runs announce → first trick → meldReveal → show → trick two', () => {
 		const doc = atMeld();
 		reduce(doc, { type: 'AnnounceMeld', seat: 0 }); // claims omitted → all

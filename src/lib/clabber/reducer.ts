@@ -4,11 +4,18 @@
 // `legalBids` first; the throw is the backstop.
 
 import type { Action } from './actions';
-import type { GameDoc, HandResult, Seat, Suit, TeamId } from './types';
+import type { GameDoc, HandResult, MeldClaim, Seat, Suit, TeamId } from './types';
 import { suitOf, trickWinner } from './cards';
 import { legalBids, sameBid, describeBid } from './bidding';
 import { deal } from './deal';
-import { detectMelds, resolveMeld, selectBestMelds, validateClaims } from './meld';
+import {
+	classifyMeld,
+	detectMelds,
+	resolveMeld,
+	selectBestMelds,
+	sameMeldClaim,
+	validateClaims
+} from './meld';
 import { legalMoves } from './play';
 import { checkGameEnd, scoreHand } from './score';
 import { nextSeat, otherTeam, seatsOfTeam, teamOf } from './state';
@@ -45,6 +52,8 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return bid(doc, action);
 		case 'AnnounceMeld':
 			return announceMeld(doc, action);
+		case 'DeclareMeld':
+			return declareMeld(doc, action);
 		case 'ShowMeld':
 			return showMeld(doc, action);
 		case 'AdvanceMeldReveal':
@@ -280,6 +289,38 @@ function announceMeld(doc: GameDoc, a: Extract<Action, { type: 'AnnounceMeld' }>
 	// `claims` omitted → claim everything the hand holds (bots, older callers).
 	// Given a list, keep only the ones the hand can actually back up.
 	doc.melds.declared[a.seat] = a.claims ? validateClaims(a.claims, available) : available;
+}
+
+/** A human declares one meld by picking its exact cards. Repeatable up to the
+ *  seat's first card in trick one. */
+function declareMeld(doc: GameDoc, a: Extract<Action, { type: 'DeclareMeld' }>): void {
+	if (doc.phase !== 'meld') fail('meld may only be declared during the first trick');
+	const t = doc.trick;
+	if (!t) fail('no trick in progress');
+	if (t.plays.some((p) => p.seat === a.seat)) {
+		fail(`seat ${a.seat} has already played to the first trick`);
+	}
+
+	const hand = doc.hands[a.seat];
+	for (const c of a.cards) if (!hand.includes(c)) fail(`card not in hand: ${c}`);
+
+	const claim = classifyMeld(a.cards, doc.trump);
+	if (!claim) fail('those cards are not a valid meld');
+
+	const declared = doc.melds.declared[a.seat] ?? [];
+	if (declared.some((d) => sameMeldClaim(d, claim))) fail('that meld is already declared');
+
+	// No card may be reused across a seat's melds — except that bella's K/Q may
+	// also sit in a sequence (and vice versa).
+	const bellaRunPair = (x: MeldClaim, y: MeldClaim) =>
+		(x.group === 'bella' && y.group === 'run') || (x.group === 'run' && y.group === 'bella');
+	for (const d of declared) {
+		if (bellaRunPair(d, claim)) continue;
+		const clash = claim.cards.find((c) => d.cards.includes(c));
+		if (clash) fail(`card ${clash} is already in another meld`);
+	}
+
+	doc.melds.declared[a.seat] = [...declared, claim];
 }
 
 /** Show an announced meld to the table during `meldReveal`. */
