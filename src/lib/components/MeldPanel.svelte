@@ -16,6 +16,7 @@
 	const show = $derived(doc?.phase === 'meld' && mySeat != null && !iPlayed);
 
 	const declared = $derived(mySeat != null ? (doc?.melds.declared[mySeat] ?? []) : []);
+	const bellaMine = $derived(mySeat != null && doc?.melds.bella === mySeat);
 	const myHand = $derived(
 		show && doc && mySeat != null ? sortHand(doc.hands[mySeat], doc.trump) : ([] as CardT[])
 	);
@@ -44,7 +45,7 @@
 			chosen = [];
 			errorMsg = '';
 		} else {
-			errorMsg = 'Those cards don’t form a meld you can declare.';
+			errorMsg = 'Those cards don’t form a meld you can call.';
 		}
 	}
 
@@ -64,13 +65,16 @@
 	<div
 		class="flex w-full max-w-sm flex-col items-center gap-2 rounded-2xl bg-green-950/85 p-4 ring-1 ring-white/10"
 	>
-		{#if declared.length}
+		{#if declared.length || bellaMine}
 			<ul class="flex flex-wrap justify-center gap-1.5 text-xs">
 				{#each declared as d (d.cards.join())}
 					<li class="rounded bg-white/10 px-2 py-1">
 						{describe(d.kind, d.suit)} · {d.cards.map(cardTag).join(' ')} · {d.points}
 					</li>
 				{/each}
+				{#if bellaMine}
+					<li class="rounded bg-white/10 px-2 py-1">Bella · 20</li>
+				{/if}
 			</ul>
 		{/if}
 
@@ -79,11 +83,11 @@
 				onclick={openPicker}
 				class="rounded-lg bg-amber-300 px-4 py-2 text-sm font-semibold text-green-950 hover:bg-amber-200"
 			>
-				Declare meld
+				Call meld
 			</button>
 			<div class="text-[11px] text-white/40">
-				{declared.length
-					? 'Declare another, or play a card when you’re done.'
+				{declared.length || bellaMine
+					? 'Call another, or play a card when you’re done.'
 					: 'Or just play a card if you have no meld.'}
 			</div>
 		{:else}
@@ -120,7 +124,7 @@
 					disabled={!preview}
 					class="rounded-lg bg-amber-300 px-4 py-1.5 text-sm font-semibold text-green-950 hover:bg-amber-200 disabled:opacity-40"
 				>
-					Declare
+					Call
 				</button>
 			</div>
 		{/if}

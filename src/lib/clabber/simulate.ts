@@ -3,10 +3,11 @@
 
 import type { GameDoc, Seat } from './types';
 import { chooseBid, chooseCard } from './bot';
+import { bestMeld, compareMeldClaim } from './meld';
 import { legalMoves } from './play';
 import { makeRng, randomSeed } from './rng';
 import { reduce } from './reducer';
-import { SEATS, createGame } from './state';
+import { SEATS, createGame, otherTeam, seatsOfTeam, teamOf } from './state';
 
 export interface SimResult {
 	doc: GameDoc;
@@ -42,20 +43,19 @@ function step(doc: GameDoc, nextSeed: () => string): void {
 			if (doc.phase === 'meld' && doc.melds.declared[seat] == null) {
 				reduce(doc, { type: 'AnnounceMeld', seat });
 			}
+			if (
+				doc.phase === 'trick' &&
+				doc.trick!.number === 2 &&
+				(doc.melds.declared[seat]?.length ?? 0) > 0 &&
+				!doc.melds.shownDone[seat] &&
+				!showWouldRenege(doc, seat)
+			) {
+				reduce(doc, { type: 'ShowMeld', seat });
+				return;
+			}
 			const card = chooseCard(doc, seat);
 			assertLegal(doc, seat, card);
 			reduce(doc, { type: 'PlayCard', seat, card });
-			return;
-		}
-		case 'meldReveal': {
-			const pending = SEATS.find((s) => {
-				const d = doc.melds.declared[s];
-				return d != null && d.length > 0 && !doc.melds.shown[s];
-			});
-			reduce(
-				doc,
-				pending != null ? { type: 'ShowMeld', seat: pending } : { type: 'AdvanceMeldReveal' }
-			);
 			return;
 		}
 		case 'trickDone': {
@@ -70,6 +70,14 @@ function step(doc: GameDoc, nextSeed: () => string): void {
 		default:
 			throw new Error(`simulator reached unexpected phase ${doc.phase}`);
 	}
+}
+
+function showWouldRenege(doc: GameDoc, seat: Seat): boolean {
+	const mine = bestMeld(doc.melds.declared[seat] ?? [], doc.trump);
+	if (!mine) return false;
+	const [x, y] = seatsOfTeam(otherTeam(teamOf(seat)));
+	const opp = bestMeld([...(doc.melds.shown[x] ?? []), ...(doc.melds.shown[y] ?? [])], doc.trump);
+	return opp != null && compareMeldClaim(mine, opp, doc.trump) < 0;
 }
 
 function assertLegal(doc: GameDoc, seat: Seat, card: string): void {

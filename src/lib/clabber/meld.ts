@@ -19,7 +19,7 @@
 
 import type { Card, GameDoc, MeldClaim, Suit, TeamId } from './types';
 import { RANKS, SUITS, rankOf, sequenceStrength, suitOf } from './cards';
-import { seatsOfTeam } from './state';
+import { teamOf } from './state';
 
 /** Every meld present in a hand (may include mutually-exclusive candidates; use
  *  `selectBestMelds` to pick the scoring set). */
@@ -221,50 +221,52 @@ export function compareMeldClaim(a: MeldClaim, b: MeldClaim, trump: Suit | null)
 	return 0;
 }
 
-function bestClaim(claims: MeldClaim[], trump: Suit | null): MeldClaim | null {
-	if (!claims.length) return null;
-	return claims.reduce((best, c) => (compareMeldClaim(c, best, trump) > 0 ? c : best));
+/** The strongest claim in `claims` (by `compareMeldClaim`), or `null`. */
+export function bestMeld(claims: MeldClaim[], trump: Suit | null): MeldClaim | null {
+	const real = claims.filter((c): c is MeldClaim => c != null);
+	if (!real.length) return null;
+	return real.reduce((best, c) => (compareMeldClaim(c, best, trump) > 0 ? c : best));
 }
 
-/** Resolve the deal's meld from `doc.melds.declared` and write the outcome back
- *  into `doc.melds` (called when the first trick completes). */
-export function resolveMeld(doc: GameDoc): void {
+/** Score the melds that were actually shown during trick two, writing the
+ *  outcome into `doc.melds`. Equal opposing melds cancel pairwise; the team
+ *  with the best remaining shown meld then scores all of its shown melds.
+ *  Bella (from `doc.melds.bella`) always adds 20 for its holder's team. */
+export function resolveShownMelds(doc: GameDoc): void {
 	const trump = doc.trump;
-	const sel = [0, 1, 2, 3].map((s) => selectBestMelds(doc.melds.declared[s] ?? []));
-
-	const teamBest = ([0, 1] as TeamId[]).map((t) => {
-		const [x, y] = seatsOfTeam(t);
-		return bestClaim([...sel[x].list, ...sel[y].list], trump);
-	});
-	const teamSum: [number, number] = [sel[0].sum + sel[2].sum, sel[1].sum + sel[3].sum];
-
-	const bellaTeam = ((): TeamId | null => {
-		for (const t of [0, 1] as TeamId[]) {
-			const [x, y] = seatsOfTeam(t);
-			if ([...sel[x].list, ...sel[y].list].some((c) => c.group === 'bella')) return t;
-		}
-		return null;
-	})();
-
-	let winner: TeamId | null = null;
-	if (teamBest[0] && teamBest[1]) {
-		const cmp = compareMeldClaim(teamBest[0], teamBest[1], trump);
-		winner = cmp > 0 ? 0 : cmp < 0 ? 1 : null;
-	} else if (teamBest[0]) {
-		winner = 0;
-	} else if (teamBest[1]) {
-		winner = 1;
+	const teamShown: [MeldClaim[], MeldClaim[]] = [[], []];
+	for (const s of [0, 1, 2, 3] as const) {
+		for (const m of doc.melds.shown[s] ?? []) teamShown[teamOf(s)].push(m);
 	}
+
+	// Cancel each pair of exactly-equal melds, one from each team.
+	const t0 = [...teamShown[0]];
+	const t1 = [...teamShown[1]];
+	for (let i = t0.length - 1; i >= 0; i--) {
+		const j = t1.findIndex((b) => compareMeldClaim(t0[i], b, trump) === 0);
+		if (j >= 0) {
+			t0.splice(i, 1);
+			t1.splice(j, 1);
+		}
+	}
+
+	const best0 = bestMeld(t0, trump);
+	const best1 = bestMeld(t1, trump);
+	const sum = (list: MeldClaim[]) => list.reduce((n, c) => n + c.points, 0);
 
 	const points: [number, number] = [0, 0];
-	if (winner != null) {
-		points[winner] = teamSum[winner];
-		// Only one player in the whole game can hold bella; if that is the
-		// losing team, they still score it.
-		if (bellaTeam != null && bellaTeam !== winner) points[bellaTeam] += 20;
-	} else if (bellaTeam != null) {
-		points[bellaTeam] += 20;
-	}
+	let winner: TeamId | null = null;
+	if (best0 && best1) {
+		const cmp = compareMeldClaim(best0, best1, trump);
+		if (cmp > 0) winner = 0;
+		else if (cmp < 0) winner = 1;
+	} else if (best0) winner = 0;
+	else if (best1) winner = 1;
+
+	if (winner === 0) points[0] = sum(t0);
+	else if (winner === 1) points[1] = sum(t1);
+
+	if (doc.melds.bella != null) points[teamOf(doc.melds.bella)] += 20;
 
 	doc.melds.points = points;
 	doc.melds.scoredTeam = winner;

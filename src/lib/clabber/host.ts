@@ -5,7 +5,8 @@
 import type { Action } from './actions';
 import type { GameDoc, Seat } from './types';
 import { chooseBid, chooseCard } from './bot';
-import { SEATS, otherTeam, seatsOfTeam, teamOf } from './state';
+import { bestMeld, compareMeldClaim } from './meld';
+import { otherTeam, seatsOfTeam, teamOf } from './state';
 
 /** How long presence silence means a host is gone. Matches the presence
  *  staleness window so a departed host is dropped consistently. */
@@ -29,7 +30,7 @@ export function nextBotAction(
 	// A competent opponent catches a renege. If the other team left an illegal
 	// card uncalled and one of its watchers is a bot, that bot calls it.
 	const r = doc.renege;
-	if (r && !r.called && ['meld', 'meldReveal', 'trick', 'trickDone'].includes(doc.phase)) {
+	if (r && !r.called && ['meld', 'trick', 'trickDone'].includes(doc.phase)) {
 		for (const s of seatsOfTeam(otherTeam(teamOf(r.seat)))) {
 			if (doc.players[s]?.isBot) return { type: 'CallRenege', seat: s };
 		}
@@ -45,23 +46,24 @@ export function nextBotAction(
 		case 'meld': {
 			const seat = doc.trick?.turn;
 			if (seat == null || !doc.players[seat]?.isBot) return null;
-			// Announce meld before playing the first card, then play it.
+			// Call meld before playing the first card, then play it.
 			if (doc.melds.declared[seat] == null) return { type: 'AnnounceMeld', seat };
 			return { type: 'PlayCard', seat, card: chooseCard(doc, seat) };
-		}
-		case 'meldReveal': {
-			// Show each bot's announced meld, then let the host time out the pause
-			// (so a human at the table can read the reveal) with AdvanceMeldReveal.
-			const pending = (SEATS as readonly Seat[]).find((s) => {
-				const d = doc.melds.declared[s];
-				return d != null && d.length > 0 && !doc.melds.shown[s] && !!doc.players[s]?.isBot;
-			});
-			if (pending != null) return { type: 'ShowMeld', seat: pending };
-			return { type: 'AdvanceMeldReveal' };
 		}
 		case 'trick': {
 			const seat = doc.trick?.turn;
 			if (seat == null || !doc.players[seat]?.isBot) return null;
+			// Trick two: show the called meld first, unless doing so would be a
+			// renege (our best is below one the other team already showed) — then
+			// just play and let the meld lapse.
+			if (
+				doc.trick?.number === 2 &&
+				(doc.melds.declared[seat]?.length ?? 0) > 0 &&
+				!doc.melds.shownDone[seat] &&
+				!showWouldRenege(doc, seat)
+			) {
+				return { type: 'ShowMeld', seat };
+			}
 			return { type: 'PlayCard', seat, card: chooseCard(doc, seat) };
 		}
 		case 'trickDone':
@@ -74,4 +76,15 @@ export function nextBotAction(
 		default:
 			return null; // lobby, gameOver
 	}
+}
+
+/** Whether showing `seat`'s called meld now would rank below a meld the other
+ *  team has already shown this trick-two round (which would be a renege). */
+function showWouldRenege(doc: GameDoc, seat: Seat): boolean {
+	const declared = doc.melds.declared[seat] ?? [];
+	const mine = bestMeld(declared, doc.trump);
+	if (!mine) return false;
+	const [x, y] = seatsOfTeam(otherTeam(teamOf(seat)));
+	const opp = bestMeld([...(doc.melds.shown[x] ?? []), ...(doc.melds.shown[y] ?? [])], doc.trump);
+	return opp != null && compareMeldClaim(mine, opp, doc.trump) < 0;
 }

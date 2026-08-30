@@ -4,14 +4,16 @@
 // `legalBids` first; the throw is the backstop.
 
 import type { Action } from './actions';
-import type { GameDoc, HandResult, MeldClaim, Seat, Suit, TeamId } from './types';
+import type { Card, GameDoc, HandResult, MeldClaim, Seat, Suit, TeamId } from './types';
 import { suitOf, trickWinner } from './cards';
 import { legalBids, sameBid, describeBid } from './bidding';
 import { deal } from './deal';
 import {
+	bestMeld,
 	classifyMeld,
+	compareMeldClaim,
 	detectMelds,
-	resolveMeld,
+	resolveShownMelds,
 	selectBestMelds,
 	sameMeldClaim,
 	validateClaims
@@ -56,8 +58,8 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return declareMeld(doc, action);
 		case 'ShowMeld':
 			return showMeld(doc, action);
-		case 'AdvanceMeldReveal':
-			return advanceMeldReveal(doc);
+		case 'CallBella':
+			return callBella(doc, action);
 		case 'PlayCard':
 			return playCard(doc, action);
 		case 'CallRenege':
@@ -127,10 +129,13 @@ function resetToLobby(doc: GameDoc): void {
 	doc.bidding = null;
 	doc.trick = null;
 	doc.wonBySeat = [[], [], [], []];
+	doc.playedBySeat = [[], [], [], []];
 	doc.lastTrickWinner = null;
 	doc.melds = {
 		declared: [null, null, null, null],
-		shown: [false, false, false, false],
+		shown: [[], [], [], []],
+		shownDone: [false, false, false, false],
+		bella: null,
 		resolved: false,
 		scoredTeam: null,
 		points: [0, 0]
@@ -215,10 +220,13 @@ function startHand(doc: GameDoc, a: Extract<Action, { type: 'StartHand' }>): voi
 	doc.maker = null;
 	doc.trick = null;
 	doc.wonBySeat = [[], [], [], []];
+	doc.playedBySeat = [[], [], [], []];
 	doc.lastTrickWinner = null;
 	doc.melds = {
 		declared: [null, null, null, null],
-		shown: [false, false, false, false],
+		shown: [[], [], [], []],
+		shownDone: [false, false, false, false],
+		bella: null,
 		resolved: false,
 		scoredTeam: null,
 		points: [0, 0]
@@ -278,28 +286,43 @@ function bid(doc: GameDoc, a: Extract<Action, { type: 'Bid' }>): void {
 
 // --- meld + trick play -----------------------------------------------------
 
-function announceMeld(doc: GameDoc, a: Extract<Action, { type: 'AnnounceMeld' }>): void {
-	if (doc.phase !== 'meld') fail('meld may only be announced during the first trick');
-	const t = doc.trick;
-	if (!t) fail('no trick in progress');
-	if (t.plays.some((p) => p.seat === a.seat)) {
-		fail(`seat ${a.seat} has already played to the first trick`);
-	}
-	const available = detectMelds(doc.hands[a.seat], doc.trump);
-	// `claims` omitted → claim everything the hand holds (bots, older callers).
-	// Given a list, keep only the ones the hand can actually back up.
-	doc.melds.declared[a.seat] = a.claims ? validateClaims(a.claims, available) : available;
+/** A fresh plain copy of a claim — never re-insert a claim already living in
+ *  the Automerge document into another slot of it. */
+function cloneMeld(c: MeldClaim): MeldClaim {
+	return { ...c, cards: [...c.cards] };
 }
 
-/** A human declares one meld by picking its exact cards. Repeatable up to the
- *  seat's first card in trick one. */
-function declareMeld(doc: GameDoc, a: Extract<Action, { type: 'DeclareMeld' }>): void {
-	if (doc.phase !== 'meld') fail('meld may only be declared during the first trick');
+/** Split a hand's detectable melds into the sequence/set list and a bella flag. */
+function splitBella(claims: MeldClaim[]): { melds: MeldClaim[]; bella: boolean } {
+	return {
+		melds: claims.filter((c) => c.group !== 'bella'),
+		bella: claims.some((c) => c.group === 'bella')
+	};
+}
+
+function requireMeldCallWindow(doc: GameDoc, seat: Seat): void {
+	if (doc.phase !== 'meld') fail('meld may only be called during the first trick');
 	const t = doc.trick;
 	if (!t) fail('no trick in progress');
-	if (t.plays.some((p) => p.seat === a.seat)) {
-		fail(`seat ${a.seat} has already played to the first trick`);
+	if (t.plays.some((p) => p.seat === seat)) {
+		fail(`seat ${seat} has already played to the first trick`);
 	}
+}
+
+/** Bot / bulk path: call every meld the hand holds (or the given subset). */
+function announceMeld(doc: GameDoc, a: Extract<Action, { type: 'AnnounceMeld' }>): void {
+	requireMeldCallWindow(doc, a.seat);
+	const available = detectMelds(doc.hands[a.seat], doc.trump);
+	const chosen = a.claims ? validateClaims(a.claims, available) : available;
+	const { melds, bella } = splitBella(chosen);
+	doc.melds.declared[a.seat] = melds;
+	if (bella) doc.melds.bella = a.seat;
+}
+
+/** Human path: call one meld by picking its exact cards. Repeatable up to the
+ *  seat's first card in trick one. Bella is recorded on `melds.bella`. */
+function declareMeld(doc: GameDoc, a: Extract<Action, { type: 'DeclareMeld' }>): void {
+	requireMeldCallWindow(doc, a.seat);
 
 	const hand = doc.hands[a.seat];
 	for (const c of a.cards) if (!hand.includes(c)) fail(`card not in hand: ${c}`);
@@ -307,60 +330,86 @@ function declareMeld(doc: GameDoc, a: Extract<Action, { type: 'DeclareMeld' }>):
 	const claim = classifyMeld(a.cards, doc.trump);
 	if (!claim) fail('those cards are not a valid meld');
 
-	const declared = doc.melds.declared[a.seat] ?? [];
-	if (declared.some((d) => sameMeldClaim(d, claim))) fail('that meld is already declared');
+	if (claim.group === 'bella') {
+		doc.melds.bella = a.seat;
+		doc.log.push(`seat ${a.seat} calls bella`);
+		return;
+	}
 
-	// No card may be reused across a seat's melds — except that bella's K/Q may
-	// also sit in a sequence (and vice versa).
-	const bellaRunPair = (x: MeldClaim, y: MeldClaim) =>
-		(x.group === 'bella' && y.group === 'run') || (x.group === 'run' && y.group === 'bella');
+	const declared = doc.melds.declared[a.seat] ?? [];
+	if (declared.some((d) => sameMeldClaim(d, claim))) fail('that meld is already called');
 	for (const d of declared) {
-		if (bellaRunPair(d, claim)) continue;
 		const clash = claim.cards.find((c) => d.cards.includes(c));
 		if (clash) fail(`card ${clash} is already in another meld`);
 	}
 
-	doc.melds.declared[a.seat] = [...declared, claim];
+	doc.melds.declared[a.seat] = [...declared.map(cloneMeld), claim];
 }
 
-/** Show an announced meld to the table during `meldReveal`. */
+/** Melds the opposing team has already shown so far in this trick-two round.
+ *  (Spread, not `flatMap` — `flatMap` won't flatten an Automerge list proxy.) */
+function oppShownMelds(doc: GameDoc, seat: Seat): MeldClaim[] {
+	const [x, y] = seatsOfTeam(otherTeam(teamOf(seat)));
+	return [...(doc.melds.shown[x] ?? []), ...(doc.melds.shown[y] ?? [])];
+}
+
+/** Show the melds this seat called — on its own turn in trick two, before it
+ *  plays. Showing a meld lower than one the other team already showed is a
+ *  renege; not showing at all forfeits the meld. */
 function showMeld(doc: GameDoc, a: Extract<Action, { type: 'ShowMeld' }>): void {
-	if (doc.phase !== 'meldReveal') fail(`nothing to show in phase ${doc.phase}`);
+	if (doc.phase !== 'trick') fail(`meld is shown during trick two (phase ${doc.phase})`);
+	const t = doc.trick;
+	if (!t || t.number !== 2) fail('meld is shown during trick two');
+	if (t.turn !== a.seat) fail(`it is not seat ${a.seat}'s turn`);
+	if (t.plays.some((p) => p.seat === a.seat))
+		fail(`seat ${a.seat} has already played to trick two`);
+	if (doc.melds.shownDone[a.seat]) fail(`seat ${a.seat} has already had its show`);
+
 	const declared = doc.melds.declared[a.seat];
-	if (declared == null || declared.length === 0) fail(`seat ${a.seat} announced no meld`);
-	if (!doc.melds.shown[a.seat]) {
-		doc.melds.shown[a.seat] = true;
-		doc.log.push(`seat ${a.seat} shows meld`);
-	}
-	// Once every announcer has shown, lock in the comparison so the reveal can
-	// display the outcome while it stays on screen.
-	if (!doc.melds.resolved && allAnnouncersShown(doc)) resolveMeld(doc);
-}
+	if (declared == null || declared.length === 0) fail(`seat ${a.seat} called no meld`);
 
-/** Leave `meldReveal` and start trick two. Anything not yet shown is shown now
- *  (a generous house rule — no forfeit for a slow click against the bots). */
-function advanceMeldReveal(doc: GameDoc): void {
-	if (doc.phase !== 'meldReveal') fail(`not revealing meld (phase ${doc.phase})`);
-	if (!doc.melds.resolved) {
-		for (const s of [0, 1, 2, 3] as Seat[]) {
-			const d = doc.melds.declared[s];
-			if (d != null && d.length > 0) doc.melds.shown[s] = true;
+	doc.melds.shownDone[a.seat] = true;
+
+	const oppBest = bestMeld(oppShownMelds(doc, a.seat), doc.trump);
+	const myBest = bestMeld(declared, doc.trump);
+
+	if (oppBest && myBest && compareMeldClaim(myBest, oppBest, doc.trump) < 0) {
+		// Showed a meld below one the other team already showed — a renege. The
+		// meld does not count; the other team may call it.
+		if (!doc.renege) {
+			doc.renege = { seat: a.seat, card: null, called: false };
+			doc.log.push(`seat ${a.seat} showed a meld below one already shown; renege may be called`);
 		}
-		resolveMeld(doc);
+		return;
 	}
-	doc.phase = 'trick';
+
+	doc.melds.shown[a.seat] = declared.map(cloneMeld);
+	doc.log.push(`seat ${a.seat} shows meld`);
 }
 
-function allAnnouncersShown(doc: GameDoc): boolean {
-	return ([0, 1, 2, 3] as Seat[]).every((s) => {
-		const d = doc.melds.declared[s];
-		return d == null || d.length === 0 || doc.melds.shown[s];
-	});
-}
+/** Call bella (K + Q of trump). Valid from the meld panel and through play,
+ *  until the seat has played both bella cards. */
+function callBella(doc: GameDoc, a: Extract<Action, { type: 'CallBella' }>): void {
+	if (doc.phase !== 'meld' && doc.phase !== 'trick') {
+		fail(`bella can't be called in phase ${doc.phase}`);
+	}
+	const trump = doc.trump;
+	if (!trump) fail('no trump this hand');
+	if (!doc.players[a.seat]) fail(`seat ${a.seat} is empty`);
 
-/** True once at least one seat has announced a non-empty meld this hand. */
-export function anyMeldAnnounced(doc: GameDoc): boolean {
-	return doc.melds.declared.some((d) => d != null && d.length > 0);
+	const k = `K${trump}` as Card;
+	const q = `Q${trump}` as Card;
+	const has = (c: Card) => doc.hands[a.seat].includes(c);
+	const played = (c: Card) => doc.playedBySeat[a.seat].includes(c);
+	if (![k, q].every((c) => has(c) || played(c))) fail(`seat ${a.seat} does not hold bella`);
+	if (![k, q].some(has)) fail('too late — both bella cards have been played');
+
+	if (doc.melds.bella === a.seat) return;
+	doc.melds.bella = a.seat;
+	doc.log.push(`seat ${a.seat} calls bella`);
+	// If the shown-meld comparison is already settled (bella called in a later
+	// trick), fold bella into the score now.
+	if (doc.melds.resolved) doc.melds.points[teamOf(a.seat)] += 20;
 }
 
 function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void {
@@ -376,7 +425,15 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 	const legal = legalMoves(doc, a.seat).includes(a.card);
 	if (!legal && !a.allowIllegal) fail(`illegal card: ${a.card}`);
 
+	// Trick two: playing without having shown forfeits any meld the seat called.
+	if (doc.phase === 'trick' && t.number === 2 && !doc.melds.shownDone[a.seat]) {
+		doc.melds.shownDone[a.seat] = true;
+		const d = doc.melds.declared[a.seat];
+		if (d && d.length > 0) doc.log.push(`seat ${a.seat} played without showing — meld forfeit`);
+	}
+
 	hand.splice(hand.indexOf(a.card), 1);
+	doc.playedBySeat[a.seat].push(a.card);
 	t.plays.push({ seat: a.seat, card: a.card });
 
 	if (!legal) {
@@ -402,24 +459,21 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 
 /** The window in which an uncalled renege can still be caught: any time before
  *  the last trick is collected and the hand is scored. */
-const RENEGE_CALLABLE: ReadonlySet<GameDoc['phase']> = new Set([
-	'meld',
-	'meldReveal',
-	'trick',
-	'trickDone'
-]);
+const RENEGE_CALLABLE: ReadonlySet<GameDoc['phase']> = new Set(['meld', 'trick', 'trickDone']);
 
 function callRenege(doc: GameDoc, a: Extract<Action, { type: 'CallRenege' }>): void {
-	if (!doc.advanced) fail('renege calls are only used in Advanced mode');
 	if (!RENEGE_CALLABLE.has(doc.phase)) fail(`too late to call the renege (phase ${doc.phase})`);
 	if (!doc.players[a.seat]) fail(`seat ${a.seat} is empty`);
 
 	const callerTeam = teamOf(a.seat);
 	const r = doc.renege;
-	// A call is upheld only when the *other* team really did leave an illegal
-	// card uncalled. Anything else is an unproven claim, which the rules punish
-	// exactly like a renege by the team that made it.
+	// A call is upheld only when the *other* team really did leave a renege
+	// uncalled (an illegal card, or showing a beaten meld).
 	const upheld = r != null && !r.called && teamOf(r.seat) === otherTeam(callerTeam);
+
+	// Speculative / unproven calls only exist in Advanced mode, where they carry
+	// the same penalty as a renege by the calling team.
+	if (!upheld && !doc.advanced) fail('there is no renege to call');
 
 	if (upheld) {
 		r.called = true;
@@ -448,15 +502,9 @@ function advanceTrick(doc: GameDoc): void {
 
 	doc.trick = { number: n + 1, leader: winner, turn: winner, plays: [], winner: null };
 
-	if (n === 1) {
-		if (anyMeldAnnounced(doc)) {
-			// Hold on trick two's board while announcers show their meld.
-			doc.phase = 'meldReveal';
-			doc.log.push('meld announced — revealing before trick two');
-			return;
-		}
-		resolveMeld(doc); // nobody announced: settle the (empty) meld and play on
-	}
+	// Meld is shown in turn order during trick two; once it's collected the
+	// shown-meld comparison is settled.
+	if (n === 2) resolveShownMelds(doc);
 
 	doc.phase = 'trick';
 }
@@ -472,9 +520,10 @@ function finishRenegedHand(doc: GameDoc, renegingSeat: Seat): void {
 	const guilty = teamOf(renegingSeat);
 	const opp = otherTeam(guilty);
 	const [a, b] = seatsOfTeam(opp);
-	const oppMeld =
+	let oppMeld =
 		selectBestMelds(doc.melds.declared[a] ?? []).sum +
 		selectBestMelds(doc.melds.declared[b] ?? []).sum;
+	if (doc.melds.bella != null && teamOf(doc.melds.bella) === opp) oppMeld += 20;
 
 	const meldPoints: [number, number] = [0, 0];
 	meldPoints[opp] = oppMeld;

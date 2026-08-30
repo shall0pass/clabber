@@ -14,7 +14,6 @@
 	import TrickArea from './TrickArea.svelte';
 	import BiddingPanel from './BiddingPanel.svelte';
 	import MeldPanel from './MeldPanel.svelte';
-	import MeldReveal from './MeldReveal.svelte';
 	import Scoreboard from './Scoreboard.svelte';
 	import GameOver from './GameOver.svelte';
 	import LogFeed from './LogFeed.svelte';
@@ -106,14 +105,21 @@
 	}
 
 	// Calling a renege is a standing option during Advanced play — you decide,
-	// from your own read of the table, whether the other team played an illegal
-	// card. Get it wrong and the penalty lands on your team instead, so it's a
-	// deliberate two-step.
-	const mayCallRenege = $derived(
-		advanced &&
+	// from your own read of the table, whether the other team broke a rule. Get
+	// it wrong (Advanced mode) and the penalty lands on your team, so it's a
+	// deliberate two-step. Outside Advanced mode it only appears when the other
+	// team really did leave a renege (e.g. showed a beaten meld).
+	const uncalledOppRenege = $derived(
+		doc?.renege != null &&
+			!doc.renege.called &&
 			mySeat != null &&
+			teamOf(doc.renege.seat) !== teamOf(mySeat)
+	);
+	const mayCallRenege = $derived(
+		mySeat != null &&
 			doc != null &&
-			['meld', 'meldReveal', 'trick', 'trickDone'].includes(doc.phase)
+			['meld', 'trick', 'trickDone'].includes(doc.phase) &&
+			(advanced || uncalledOppRenege)
 	);
 	let pendingCall = $state(false);
 	function callRenege() {
@@ -123,6 +129,38 @@
 	$effect(() => {
 		if (!mayCallRenege) pendingCall = false;
 	});
+
+	// Trick two: on my turn, before I play, I may show the meld I called.
+	const canShowMeld = $derived(
+		doc != null &&
+			mySeat != null &&
+			doc.phase === 'trick' &&
+			doc.trick?.number === 2 &&
+			doc.trick?.turn === mySeat &&
+			(doc.melds.declared[mySeat]?.length ?? 0) > 0 &&
+			!doc.melds.shownDone[mySeat]
+	);
+	function showMeld() {
+		if (mySeat != null) store.tryChange({ type: 'ShowMeld', seat: mySeat });
+	}
+
+	// Bella may be called from here right up until I've played both my K and Q
+	// of trump.
+	const canCallBella = $derived.by(() => {
+		if (!doc || mySeat == null || !doc.trump) return false;
+		if (doc.melds.bella === mySeat) return false;
+		if (doc.phase !== 'meld' && doc.phase !== 'trick') return false;
+		const pair = [`K${doc.trump}`, `Q${doc.trump}`] as CardT[];
+		const hand = doc.hands[mySeat];
+		const played = doc.playedBySeat[mySeat];
+		return (
+			pair.every((c) => hand.includes(c) || played.includes(c)) &&
+			pair.some((c) => hand.includes(c))
+		);
+	});
+	function callBella() {
+		if (mySeat != null) store.tryChange({ type: 'CallBella', seat: mySeat });
+	}
 	function nextHand() {
 		store.tryChange({ type: 'StartHand', seed: crypto.randomUUID() });
 	}
@@ -167,10 +205,13 @@
 			return 'Your turn to bid.';
 		}
 		if (doc.phase === 'meld' && doc.trick?.turn === mySeat) {
-			return 'Your turn: announce your meld or play a card.';
+			return 'Your turn: call your meld or play a card.';
 		}
-		if (doc.phase === 'meldReveal') return 'Meld reveal: players show the meld they called.';
-		if (doc.phase === 'trick' && doc.trick?.turn === mySeat) return 'Your turn to play a card.';
+		if (doc.phase === 'trick' && doc.trick?.turn === mySeat) {
+			return doc.trick.number === 2 && (doc.melds.declared[mySeat]?.length ?? 0) > 0
+				? 'Your turn: show your meld, then play a card.'
+				: 'Your turn to play a card.';
+		}
 		if (doc.phase === 'trickDone' && doc.trick?.winner != null) {
 			const w = doc.trick.winner;
 			return `Trick to ${w === mySeat ? 'you' : (doc.players[w]?.name ?? `seat ${w}`)}.`;
@@ -289,22 +330,45 @@
 					lastBid={lastBid(mySeat)}
 					tricks={teamTricks(mySeat)}
 				/>
-				{#if mayCallRenege && !pendingCall}
-					<button
-						onclick={() => (pendingCall = true)}
-						class="rounded-lg bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-200 ring-1 ring-red-400/40 hover:bg-red-500/25"
-					>
-						Call renege
-					</button>
-				{/if}
+				<div class="flex flex-wrap justify-center gap-2">
+					{#if canShowMeld}
+						<button
+							onclick={showMeld}
+							class="rounded-lg bg-amber-300 px-3 py-1 text-xs font-semibold text-green-950 hover:bg-amber-200"
+						>
+							Show meld
+						</button>
+					{/if}
+					{#if canCallBella}
+						<button
+							onclick={callBella}
+							class="rounded-lg bg-amber-300/90 px-3 py-1 text-xs font-semibold text-green-950 hover:bg-amber-200"
+						>
+							Call bella
+						</button>
+					{/if}
+					{#if mayCallRenege && !pendingCall}
+						<button
+							onclick={() => (pendingCall = true)}
+							class="rounded-lg bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-200 ring-1 ring-red-400/40 hover:bg-red-500/25"
+						>
+							Call renege
+						</button>
+					{/if}
+				</div>
 				{#if pendingCall}
 					<div
 						class="flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/60"
 					>
 						<p class="text-sm text-red-100">
-							Call a renege on {teamName(teamOf(mySeat) ^ 1)}? If they didn't play an illegal card,
-							the penalty falls on {teamName(teamOf(mySeat))} instead — the other team takes 162 plus
-							any meld and the hand ends.
+							{#if advanced}
+								Call a renege on {teamName(teamOf(mySeat) ^ 1)}? If they didn't break a rule, the
+								penalty falls on {teamName(teamOf(mySeat))} instead — the other team takes 162 plus any
+								meld and the hand ends.
+							{:else}
+								Call the renege on {teamName(teamOf(mySeat) ^ 1)}? {teamName(teamOf(mySeat))} takes 162
+								plus any meld and the hand ends.
+							{/if}
 						</p>
 						<div class="flex gap-2">
 							<button
@@ -349,7 +413,6 @@
 	<!-- Outside the .lost filter so the fixed overlays position against the
 	     viewport and the fireworks/tears keep their colour. -->
 	<GameOver {store} />
-	<MeldReveal {store} />
 	{#if doc.training}
 		<CoachPanel {store} />
 	{/if}

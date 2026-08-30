@@ -39,7 +39,6 @@
 						minDelayMs: 15,
 						maxDelayMs: 40,
 						trickDelayMs: 40,
-						meldRevealDelayMs: 40,
 						interHandDelayMs: 60,
 						redealDelayMs: 20
 					}

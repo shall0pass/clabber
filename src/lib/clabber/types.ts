@@ -19,9 +19,8 @@ export type Phase =
 	| 'bid1' // round 1 — play or pass the up-card suit
 	| 'bid2' // round 2 — name any other suit, or pass
 	| 'redeal' // everyone passed twice; the same dealer deals again
-	| 'meld' // first trick in progress; meld announcements still open
-	| 'meldReveal' // first trick collected; announcers show their meld before trick 2
-	| 'trick' // tricks 2..6
+	| 'meld' // first trick in progress; meld may still be called
+	| 'trick' // tricks 2..6 (meld is shown in turn order during trick 2)
 	| 'trickDone' // all four cards played; held on screen before it is collected
 	| 'handScored' // hand finished, showing the breakdown
 	| 'gameOver';
@@ -75,16 +74,24 @@ export interface MeldClaim {
 }
 
 export interface MeldState {
-	/** Per seat: the melds announced before that seat's first trick-1 card, or
-	 *  `null` if the seat never announced (meld is then forfeit). An empty array
-	 *  means the seat announced but claimed nothing. */
+	/** Per seat: the melds called before that seat's first trick-1 card, or
+	 *  `null` if the seat never opened the call panel (meld is then forfeit).
+	 *  An empty array means the seat opened it but called nothing. Bella is not
+	 *  kept here — see `bella`. */
 	declared: (MeldClaim[] | null)[];
-	/** Per seat: whether the seat has shown its announced meld to the table
-	 *  during the `meldReveal` step. A seat with no declared meld stays `false`. */
-	shown: boolean[];
+	/** Per seat: the melds actually shown during trick two (in the seat's show
+	 *  turn). Empty until the seat shows; stays empty if the seat forfeits by
+	 *  playing without showing, or could not show a meld that wasn't beaten. */
+	shown: MeldClaim[][];
+	/** Per seat: `true` once the seat has taken (or missed) its trick-two show. */
+	shownDone: boolean[];
+	/** The seat holding bella (K + Q of trump). Set whenever bella is called —
+	 *  in the meld panel, or later, up until the second bella card is played.
+	 *  Bella always scores 20 for that seat's team, whatever else happens. */
+	bella: Seat | null;
 	resolved: boolean;
-	/** Team that won the meld comparison and scores its full meld total; `null`
-	 *  when nobody has meld or the comparison is a push. */
+	/** Team that won the shown-meld comparison and scores its melds; `null` when
+	 *  nobody scored a sequence/set meld or it was a wash. */
 	scoredTeam: TeamId | null;
 	/** Final meld points awarded to each team (includes bella). */
 	points: [number, number];
@@ -152,14 +159,18 @@ export interface GameDoc {
 
 	/** `wonBySeat[seat]` is the list of 4-card tricks that seat won. */
 	wonBySeat: Card[][][];
+	/** `playedBySeat[seat]` is every card that seat has played this hand, in
+	 *  order — used for the "bella by the last K/Q" deadline. */
+	playedBySeat: Card[][];
 	lastTrickWinner: Seat | null;
 
 	melds: MeldState;
 
-	/** Set when a player played an illegal card in Advanced mode. The card
-	 *  stands and the hand plays on; it only becomes a scored renege if the
-	 *  other team calls it (`called`) before the last trick is collected. */
-	renege: { seat: Seat; card: Card; called: boolean } | null;
+	/** Set when a player committed a renege — an illegal card in Advanced mode
+	 *  (`card` set), or showing a meld lower than one the other team already
+	 *  showed (`card` null). Play continues; it only costs the hand if the other
+	 *  team calls it (`called`) before the last trick is collected. */
+	renege: { seat: Seat; card: Card | null; called: boolean } | null;
 
 	score: {
 		running: [number, number];

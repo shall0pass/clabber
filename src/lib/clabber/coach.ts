@@ -67,12 +67,9 @@ export function coachSections(doc: GameDoc, mySeat: Seat | null): CoachSection[]
 			sections.push(trickSection(doc, mySeat, who));
 			break;
 
-		case 'meldReveal':
-			sections.push(meldRevealSection(doc, mySeat, who));
-			break;
-
 		case 'trick':
 		case 'trickDone':
+			if (doc.trick?.number === 2) sections.push(meldShowSection(doc, mySeat, who));
 			sections.push(trickSection(doc, mySeat, who));
 			break;
 
@@ -172,42 +169,44 @@ function meldSection(doc: GameDoc, mySeat: Seat | null): CoachSection {
 	const points: string[] = [
 		'Meld is a scoring combination in your hand: a run of 3 / 4 / 5 cards in one suit (20 / 50 / 100), four of a kind (100, or 200 for the four Jacks), or the King and Queen of trump — “Bella”, worth 20.',
 		'Runs use the order 9 10 J Q K A and ignore which suit is trump.',
-		'Only the team with the single best meld scores — but that team then scores every meld it holds. Bella always scores for whoever has it.',
-		'You have to spot your own meld. Tap “Declare meld”, pick the exact cards that form one, and confirm — repeat for each meld you hold.',
-		'Declare before you play your first card to trick one, or the meld is lost for this hand.'
+		'You have to spot your own meld. Tap “Call meld”, pick the exact cards that form one, and confirm — repeat for each meld you hold.',
+		'Call before you play your first card to trick one, or the meld is lost. You still have to show it in trick two.',
+		'Bella is different: it always scores, and you can call it any time up to playing the second of your K/Q of trump.'
 	];
 
-	if (mySeat != null && (doc.melds.declared[mySeat]?.length ?? 0) > 0) {
-		const sum = selectBestMelds(doc.melds.declared[mySeat] ?? []).sum;
-		points.push(`So far you’ve declared ${doc.melds.declared[mySeat]!.length} meld worth ${sum}.`);
+	if (mySeat != null) {
+		const n = doc.melds.declared[mySeat]?.length ?? 0;
+		const bella = doc.melds.bella === mySeat;
+		if (n > 0 || bella) {
+			const bits = [];
+			if (n > 0) bits.push(`${n} meld (${selectBestMelds(doc.melds.declared[mySeat] ?? []).sum})`);
+			if (bella) bits.push('bella');
+			points.push(`Called so far: ${bits.join(' + ')}.`);
+		}
 	}
 
-	return { title: 'Meld — declare it before you play', points };
+	return { title: 'Meld — call it before you play', points };
 }
 
-function meldRevealSection(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection {
+function meldShowSection(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection {
 	const points: string[] = [
-		'The first trick is in. Everyone who called meld now shows it, so the table can check who has the best one.',
-		'The team with the single highest meld scores the sum of all its melds; the other team scores nothing — except Bella, which always scores.'
+		'It’s trick two: players show the meld they called, in turn order, each just before playing their card.',
+		'You may only show a meld that isn’t below one the other team has already shown. An equal meld can be shown — the two then cancel and neither scores (a 9-10-J dad cancels another 9-10-J dad).',
+		'If your meld is beaten you simply don’t show it and it doesn’t count — even if your partner shows something bigger later. Showing a meld that’s lower than one already shown is a renege.',
+		'Bella still always scores, whatever happens here.'
 	];
 
-	const announcers = ([0, 1, 2, 3] as Seat[]).filter((s) => {
-		const d = doc.melds.declared[s];
-		return d != null && d.length > 0;
-	});
-	if (announcers.length) {
-		points.push(
-			`Called meld: ${announcers.map((s) => `${who(s)}${doc.melds.shown[s] ? ' (shown)' : ''}`).join(', ')}.`
-		);
+	if (
+		mySeat != null &&
+		(doc.melds.declared[mySeat]?.length ?? 0) > 0 &&
+		!doc.melds.shownDone[mySeat]
+	) {
+		points.push('On your turn, tap “Show meld” before you play — or just play to let it lapse.');
 	}
+	const shown = ([0, 1, 2, 3] as Seat[]).filter((s) => (doc.melds.shown[s] ?? []).length > 0);
+	if (shown.length) points.push(`Shown so far: ${shown.map((s) => who(s)).join(', ')}.`);
 
-	if (mySeat != null && (doc.melds.declared[mySeat]?.length ?? 0) > 0 && !doc.melds.shown[mySeat]) {
-		points.push('Tap “Show my meld” to reveal your cards, then “Continue”.');
-	} else {
-		points.push('Tap “Continue” when you’ve seen enough — the table plays on shortly either way.');
-	}
-
-	return { title: 'Showing meld', points };
+	return { title: 'Showing meld — trick two', points };
 }
 
 function trickSection(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection {

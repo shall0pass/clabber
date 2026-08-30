@@ -25,8 +25,6 @@ export interface HostOptions {
 	/** How long to hold a completed trick on screen before collecting it (ms).
 	 *  A human can collect it sooner with the "Continue" button. */
 	trickDelayMs?: number;
-	/** How long to hold the meld reveal on screen before trick two (ms). */
-	meldRevealDelayMs?: number;
 	/** Pause on the score screen before dealing the next hand (ms). */
 	interHandDelayMs?: number;
 	/** Pause before re-dealing after everyone passed twice (ms). */
@@ -45,7 +43,6 @@ const DEFAULTS: Required<HostOptions> = {
 	// A long hold so there's time to study what was played; the "Continue"
 	// button lets anyone move on sooner.
 	trickDelayMs: 15000,
-	meldRevealDelayMs: 15000,
 	// Long enough to read the hand's score breakdown; "Next hand" moves on sooner.
 	interHandDelayMs: 15000,
 	redealDelayMs: 700,
@@ -177,14 +174,7 @@ export class Host {
 		const pending = nextBotAction(doc!, this.#opts.makeSeed);
 		if (!doc || !pending) return;
 
-		const {
-			minDelayMs,
-			maxDelayMs,
-			trickDelayMs,
-			meldRevealDelayMs,
-			interHandDelayMs,
-			redealDelayMs
-		} = this.#opts;
+		const { minDelayMs, maxDelayMs, trickDelayMs, interHandDelayMs, redealDelayMs } = this.#opts;
 		const thinkDelay = minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
 		const delay =
 			pending.type === 'CallRenege'
@@ -195,11 +185,7 @@ export class Host {
 						? interHandDelayMs
 						: doc.phase === 'redeal'
 							? redealDelayMs
-							: doc.phase === 'meldReveal'
-								? pending.type === 'AdvanceMeldReveal'
-									? meldRevealDelayMs
-									: thinkDelay
-								: thinkDelay;
+							: thinkDelay;
 
 		this.#moveTimer = setTimeout(() => {
 			this.#moveTimer = undefined;

@@ -17,20 +17,22 @@ export type Action =
 	 *  dealer; from `redeal` (or the first hand) it keeps the current dealer. */
 	| { type: 'StartHand'; seed: string }
 	| { type: 'Bid'; seat: Seat; bid: Bid }
-	/** Announce meld before playing the first trick. `claims` is the subset of
-	 *  the seat's holdable melds the caller chose; omit it to claim every meld
-	 *  the hand contains. Used by the bot runner — human players declare each
-	 *  meld by hand with `DeclareMeld`. */
+	/** Call meld before playing the first trick. `claims` is the subset of the
+	 *  seat's holdable melds the caller chose; omit it to claim every meld the
+	 *  hand contains. Used by the bot runner — human players call each meld by
+	 *  hand with `DeclareMeld`. */
 	| { type: 'AnnounceMeld'; seat: Seat; claims?: MeldClaim[] }
-	/** Declare one meld by naming the exact cards that form it (a human picking
+	/** Call one meld by naming the exact cards that form it (a human picking
 	 *  cards from their hand). The reducer classifies the selection; anything
 	 *  that isn't a real meld is rejected. Repeatable — one call per meld. */
 	| { type: 'DeclareMeld'; seat: Seat; cards: Card[] }
-	/** Show an announced meld to the table during the `meldReveal` step. */
+	/** Show the melds this seat called, on its turn in trick two, before it
+	 *  plays. Showing a meld lower than one the other team already showed is a
+	 *  renege. Not showing = the meld is forfeit. */
 	| { type: 'ShowMeld'; seat: Seat }
-	/** Leave `meldReveal` for trick two. The host fires this after a pause; a
-	 *  human can also click through sooner. Any meld not yet shown is shown now. */
-	| { type: 'AdvanceMeldReveal' }
+	/** Call bella (K + Q of trump). Allowed from the meld panel and any time in
+	 *  play, up until the second of the two bella cards has been played. */
+	| { type: 'CallBella'; seat: Seat }
 	/** `allowIllegal` (Advanced mode) lets the seat play a card that breaks the
 	 *  rules of following/trumping. The card stands and play continues; it is
 	 *  only penalised if the other team calls the renege. */

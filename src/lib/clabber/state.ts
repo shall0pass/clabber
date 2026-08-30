@@ -30,10 +30,13 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 		bidding: null,
 		trick: null,
 		wonBySeat: [[], [], [], []],
+		playedBySeat: [[], [], [], []],
 		lastTrickWinner: null,
 		melds: {
 			declared: [null, null, null, null],
-			shown: [false, false, false, false],
+			shown: [[], [], [], []],
+			shownDone: [false, false, false, false],
+			bella: null,
 			resolved: false,
 			scoredTeam: null,
 			points: [0, 0]

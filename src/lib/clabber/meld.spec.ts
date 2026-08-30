@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { classifyMeld, compareMeldClaim, detectMelds, resolveMeld, selectBestMelds } from './meld';
+import {
+	classifyMeld,
+	compareMeldClaim,
+	detectMelds,
+	resolveShownMelds,
+	selectBestMelds
+} from './meld';
 import { createGame } from './state';
 import type { Card, GameDoc, MeldClaim, Suit } from './types';
 
@@ -122,47 +128,89 @@ describe('compareMeldClaim', () => {
 	});
 });
 
-describe('resolveMeld', () => {
-	function docWithDeclared(decl: (Card[] | null)[], trump: GameDoc['trump'] = 'S'): GameDoc {
+describe('resolveShownMelds', () => {
+	/** A doc whose four seats have shown the melds detectable in the given
+	 *  hands (bella, if any, recorded on `melds.bella`). */
+	function docWithShown(hands: (Card[] | null)[], trump: GameDoc['trump'] = 'S'): GameDoc {
 		const doc = createGame('T', 0);
 		doc.trump = trump;
-		doc.melds.declared = decl.map((h) => (h ? detectMelds(h, trump) : null));
+		hands.forEach((h, s) => {
+			if (!h) return;
+			const found = detectMelds(h, trump);
+			doc.melds.shown[s] = found.filter((c) => c.group !== 'bella');
+			if (found.some((c) => c.group === 'bella')) doc.melds.bella = s as 0 | 1 | 2 | 3;
+		});
 		return doc;
 	}
 
-	it('gives the whole meld total to the team with the highest meld', () => {
-		const doc = docWithDeclared([
+	it('gives the whole meld total to the team with the best shown meld', () => {
+		const doc = docWithShown([
 			['9H', 'TH', 'JH', 'QH', 'AS', 'KC'], // team 0: fifty (50)
 			['9C', 'TC', 'JC', 'AD', 'KD', 'QD'], // team 1: dad in clubs (20)
-			['9S', 'TD', 'KH', '9D', 'AH', 'TS'], // team 0: nothing
-			['JD', 'QC', 'AC', 'KS', 'QH', '9S'] // team 1: nothing
+			null,
+			null
 		]);
-		resolveMeld(doc);
+		resolveShownMelds(doc);
 		expect(doc.melds.scoredTeam).toBe(0);
 		expect(doc.melds.points).toEqual([50, 0]);
 	});
 
 	it('a losing team still scores its bella', () => {
-		const doc = docWithDeclared([
+		const doc = docWithShown([
 			['AS', 'AH', 'AD', 'AC', '9H', 'TH'], // team 0: four aces (100)
 			['KS', 'QS', 'JH', 'TD', '9D', 'TC'], // team 1: bella only (20)
 			null,
 			null
 		]);
-		resolveMeld(doc);
+		resolveShownMelds(doc);
 		expect(doc.melds.scoredTeam).toBe(0);
 		expect(doc.melds.points).toEqual([100, 20]);
 	});
 
-	it('scores nobody (except bella) when the top melds are an equal-rank push', () => {
-		const doc = docWithDeclared([
+	it('cancels two equal shown melds so neither scores', () => {
+		const doc = docWithShown([
 			['9H', 'TH', 'JH', 'AS', 'KC', 'AD'], // team 0: dad in hearts, top J
 			['9C', 'TC', 'JC', 'KD', 'QD', 'AH'], // team 1: dad in clubs, top J
 			null,
 			null
 		]);
-		resolveMeld(doc);
+		resolveShownMelds(doc);
 		expect(doc.melds.scoredTeam).toBeNull();
 		expect(doc.melds.points).toEqual([0, 0]);
+	});
+
+	it('cancels the matching pair but still scores an unmatched meld', () => {
+		const doc = createGame('T', 0);
+		doc.trump = 'S';
+		const dadH: MeldClaim = {
+			kind: 'dad',
+			group: 'run',
+			suit: 'H',
+			cards: ['9H', 'TH', 'JH'],
+			points: 20,
+			top: 3
+		};
+		const dadC: MeldClaim = {
+			kind: 'dad',
+			group: 'run',
+			suit: 'C',
+			cards: ['9C', 'TC', 'JC'],
+			points: 20,
+			top: 3
+		};
+		const fiftyH: MeldClaim = {
+			kind: 'fifty',
+			group: 'run',
+			suit: 'H',
+			cards: ['9H', 'TH', 'JH', 'QH'],
+			points: 50,
+			top: 4
+		};
+		doc.melds.shown[0] = [dadH, fiftyH]; // team 0
+		doc.melds.shown[1] = [dadC]; // team 1 — cancels dadH
+		resolveShownMelds(doc);
+		expect(doc.melds.scoredTeam).toBe(0);
+		// dadH / dadC cancel and score nothing; the unmatched fifty still scores.
+		expect(doc.melds.points).toEqual([50, 0]);
 	});
 });

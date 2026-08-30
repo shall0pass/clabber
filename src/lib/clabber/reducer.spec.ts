@@ -15,23 +15,23 @@ function playOneHand(doc: GameDoc): void {
 		const seat = doc.bidding!.turn;
 		reduce(doc, { type: 'Bid', seat, bid: chooseBid(doc, seat) });
 	}
-	while (
-		doc.phase === 'meld' ||
-		doc.phase === 'meldReveal' ||
-		doc.phase === 'trick' ||
-		doc.phase === 'trickDone'
-	) {
+	while (doc.phase === 'meld' || doc.phase === 'trick' || doc.phase === 'trickDone') {
 		if (doc.phase === 'trickDone') {
 			reduce(doc, { type: 'AdvanceTrick' });
-			continue;
-		}
-		if (doc.phase === 'meldReveal') {
-			reduce(doc, { type: 'AdvanceMeldReveal' });
 			continue;
 		}
 		const seat = doc.trick!.turn;
 		if (doc.phase === 'meld' && doc.melds.declared[seat] == null) {
 			reduce(doc, { type: 'AnnounceMeld', seat });
+		}
+		if (
+			doc.phase === 'trick' &&
+			doc.trick!.number === 2 &&
+			(doc.melds.declared[seat]?.length ?? 0) > 0 &&
+			!doc.melds.shownDone[seat]
+		) {
+			reduce(doc, { type: 'ShowMeld', seat });
+			continue;
 		}
 		reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
 	}
@@ -404,12 +404,13 @@ describe('manual meld announce + show', () => {
 			).toThrow(RuleError);
 		});
 
-		it('lets bella overlap a sequence in the trump suit', () => {
+		it('routes bella to melds.bella, not the declared list', () => {
 			const doc = atMeld();
 			doc.hands[2] = ['JS', 'QS', 'KS', 'AS', '9H', '9D']; // seat 2, trump S
 			reduce(doc, { type: 'DeclareMeld', seat: 2, cards: ['JS', 'QS', 'KS', 'AS'] }); // fifty
-			reduce(doc, { type: 'DeclareMeld', seat: 2, cards: ['KS', 'QS'] }); // bella, shares K/Q
-			expect(doc.melds.declared[2]?.map((m) => m.kind)).toEqual(['fifty', 'bella']);
+			reduce(doc, { type: 'DeclareMeld', seat: 2, cards: ['KS', 'QS'] }); // bella (K/Q of trump)
+			expect(doc.melds.declared[2]?.map((m) => m.kind)).toEqual(['fifty']);
+			expect(doc.melds.bella).toBe(2);
 		});
 
 		it('will not declare once the seat has played to trick one', () => {
@@ -421,56 +422,102 @@ describe('manual meld announce + show', () => {
 		});
 	});
 
-	it('runs announce → first trick → meldReveal → show → trick two', () => {
-		const doc = atMeld();
-		reduce(doc, { type: 'AnnounceMeld', seat: 0 }); // claims omitted → all
-		expect(doc.melds.declared[0]?.[0].kind).toBe('dad');
-
-		// play the first trick in seat order 1,2,3,0
+	/** Play trick one (seats 1,2,3,0), landing in `trick` number 2. */
+	function throughTrickOne(doc: GameDoc): void {
 		for (const seat of [1, 2, 3, 0] as const) {
+			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
+		}
+		reduce(doc, { type: 'AdvanceTrick' });
+		expect(doc.phase).toBe('trick');
+		expect(doc.trick?.number).toBe(2);
+	}
+
+	it('shows a called meld on the seat’s trick-two turn, and scores it at the end of trick two', () => {
+		const doc = atMeld();
+		reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['9H', 'TH', 'JH'] });
+		throughTrickOne(doc);
+
+		// trick two leader is whoever won trick one; walk the four turns
+		for (let i = 0; i < 4; i++) {
+			const seat = doc.trick!.turn;
+			if (seat === 0) {
+				reduce(doc, { type: 'ShowMeld', seat });
+				expect(doc.melds.shown[0].map((m) => m.kind)).toEqual(['dad']);
+			}
 			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
 		}
 		expect(doc.phase).toBe('trickDone');
 		reduce(doc, { type: 'AdvanceTrick' });
 
-		// an announcer exists, so we hold on the reveal rather than resolving
-		expect(doc.phase).toBe('meldReveal');
-		expect(doc.melds.resolved).toBe(false);
-		expect(doc.trick?.number).toBe(2);
-
-		reduce(doc, { type: 'ShowMeld', seat: 0 });
-		expect(doc.melds.shown[0]).toBe(true);
-		expect(doc.melds.resolved).toBe(true); // last announcer shown → comparison locked
+		expect(doc.melds.resolved).toBe(true);
 		expect(doc.melds.points).toEqual([20, 0]);
-
-		reduce(doc, { type: 'AdvanceMeldReveal' });
-		expect(doc.phase).toBe('trick');
-		expect(doc.trick?.number).toBe(2);
+		expect(doc.trick?.number).toBe(3);
 	});
 
-	it('skips the reveal entirely when nobody announced', () => {
+	it('a called meld that is never shown does not score', () => {
 		const doc = atMeld();
-		for (const seat of [1, 2, 3, 0] as const) {
+		reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['9H', 'TH', 'JH'] });
+		throughTrickOne(doc);
+		for (let i = 0; i < 4; i++) {
+			const seat = doc.trick!.turn;
+			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) }); // seat 0 never shows
+		}
+		reduce(doc, { type: 'AdvanceTrick' });
+		expect(doc.melds.shownDone[0]).toBe(true);
+		expect(doc.melds.shown[0]).toEqual([]);
+		expect(doc.melds.points).toEqual([0, 0]);
+	});
+
+	it('two equal melds shown by opposing teams cancel; bella still scores', () => {
+		const doc = atMeld();
+		// seat 0 (team 0) and seat 1 (team 1) each hold a 9-10-J dad; seat 0 also
+		// holds bella.
+		doc.trump = 'S';
+		doc.hands[0] = ['9H', 'TH', 'JH', 'KS', 'QS', 'AD'];
+		doc.hands[1] = ['9C', 'TC', 'JC', 'AH', 'KD', 'TD'];
+		reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['9H', 'TH', 'JH'] });
+		reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['KS', 'QS'] }); // bella
+		reduce(doc, { type: 'DeclareMeld', seat: 1, cards: ['9C', 'TC', 'JC'] });
+		throughTrickOne(doc);
+		for (let i = 0; i < 4; i++) {
+			const seat = doc.trick!.turn;
+			if (seat === 0 || seat === 1) reduce(doc, { type: 'ShowMeld', seat });
 			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
 		}
 		reduce(doc, { type: 'AdvanceTrick' });
-		expect(doc.phase).toBe('trick');
-		expect(doc.melds.resolved).toBe(true);
+		// the two J-dads cancel; only bella scores, for team 0
+		expect(doc.melds.points).toEqual([20, 0]);
 	});
 
-	it('AdvanceMeldReveal shows anything still hidden and resolves', () => {
-		const doc = atMeld();
-		reduce(doc, { type: 'AnnounceMeld', seat: 0 });
-		for (const seat of [1, 2, 3, 0] as const) {
-			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
-		}
-		reduce(doc, { type: 'AdvanceTrick' });
-		expect(doc.phase).toBe('meldReveal');
+	it('showing a meld below one the other team already showed is a renege', () => {
+		const doc = createGame('T', 0);
+		doc.phase = 'trick';
+		doc.trump = 'S';
+		doc.maker = 0;
+		doc.players = SEATS.map((s) => ({ seat: s, name: `P${s}`, isBot: false, lastSeen: 0 }));
+		doc.hands = [['9H'], ['9C'], ['AH'], ['AC']]; // one card each — trick two
+		const dad = (suit: 'H' | 'C', cards: Card[], top: number): MeldClaim => ({
+			kind: 'dad',
+			group: 'run',
+			suit,
+			cards,
+			points: 20,
+			top
+		});
+		doc.melds.declared[0] = [dad('H', ['9H', 'TH', 'JH'], 3)]; // top J
+		doc.melds.declared[1] = [dad('C', ['TC', 'JC', 'QC'], 4)]; // top Q — stronger
+		doc.trick = { number: 2, leader: 1, turn: 1, plays: [], winner: null };
 
-		reduce(doc, { type: 'AdvanceMeldReveal' }); // nobody clicked "show"
-		expect(doc.melds.shown[0]).toBe(true);
-		expect(doc.melds.resolved).toBe(true);
-		expect(doc.phase).toBe('trick');
+		reduce(doc, { type: 'ShowMeld', seat: 1 }); // team 1 shows the stronger dad
+		expect(doc.melds.shown[1]).toHaveLength(1);
+		reduce(doc, { type: 'PlayCard', seat: 1, card: '9C' });
+		reduce(doc, { type: 'PlayCard', seat: 2, card: 'AH' });
+		reduce(doc, { type: 'PlayCard', seat: 3, card: 'AC' });
+		expect(doc.trick!.turn).toBe(0);
+
+		reduce(doc, { type: 'ShowMeld', seat: 0 }); // weaker dad after a stronger one
+		expect(doc.renege).toMatchObject({ seat: 0, card: null, called: false });
+		expect(doc.melds.shown[0]).toEqual([]);
 	});
 
 	it('records makerSeat when trump is named and clears it on the next deal', () => {
