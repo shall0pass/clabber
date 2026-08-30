@@ -134,12 +134,14 @@ export interface GameDoc {
 	players: (PlayerSlot | null)[];
 
 	phase: Phase;
-	/** Advanced (renege) mode — chosen in the lobby, then locked for the game.
-	 *  When on, a player may play any card in hand; an illegal one is a renege. */
+	/** Renege play — the default mode. A player may play any card in hand; an
+	 *  illegal one is a renege the other team must catch and call. Turned off by
+	 *  Learning mode; chosen in the lobby, then locked for the game. */
 	advanced: boolean;
-	/** Training mode — a lobby toggle that offers every player a "coach" panel at
-	 *  the table explaining the rules for whatever is on the table right now.
-	 *  Purely a learning aid, so it can be switched on or off at any time. */
+	/** Learning mode — the lobby's alternative to renege play. It enforces
+	 *  follow-suit (no reneging) and offers every player a "coach" panel at the
+	 *  table explaining the rules for whatever is on the table right now. Paired
+	 *  with `advanced`: exactly one of the two is on. */
 	training: boolean;
 	dealer: Seat;
 	/** The seat that named trump this hand (for "made by …" on the table), or

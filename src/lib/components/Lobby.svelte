@@ -33,8 +33,9 @@
 	const baseSeat = $derived(mySeat ?? 0);
 	const filled = $derived(players.every((p) => p != null));
 	const hasHuman = $derived(players.some((p) => p != null && !p.isBot));
-	const advanced = $derived(doc?.advanced ?? false);
-	const training = $derived(doc?.training ?? false);
+	// Renege play is the default. Learning mode is the alternative: it enforces
+	// follow-suit and turns on the coach panel.
+	const learning = $derived(doc?.training ?? false);
 
 	// slot 0 bottom, 1 left, 2 top, 3 right — rotated so my seat is at the bottom.
 	const slotClass = ['area-bottom', 'area-left', 'area-top', 'area-right'];
@@ -75,11 +76,10 @@
 	function deal() {
 		store.change({ type: 'StartHand', seed: crypto.randomUUID() });
 	}
-	function toggleAdvanced() {
-		store.change({ type: 'SetAdvanced', on: !advanced });
-	}
-	function toggleTraining() {
-		store.change({ type: 'SetTraining', on: !training });
+	function toggleLearning() {
+		const on = !learning;
+		store.change({ type: 'SetTraining', on });
+		store.change({ type: 'SetAdvanced', on: !on });
 	}
 
 	let copied = $state(false);
@@ -171,34 +171,20 @@
 	>
 		<input
 			type="checkbox"
-			class="mt-0.5 h-4 w-4 accent-red-500"
-			checked={advanced}
-			onchange={toggleAdvanced}
-		/>
-		<span>
-			<span class="font-semibold">Advanced: allow reneging</span>
-			<span class="mt-0.5 block text-white/50">
-				Players may play any card. An illegal one isn't an automatic loss — it stands unless the
-				other team calls the renege before the last trick, and then they take 162 plus their meld.
-				Set this before the deal; it's locked once the game starts.
-			</span>
-		</span>
-	</label>
-
-	<label
-		class="flex max-w-sm cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-4 py-3 text-sm ring-1 ring-white/10"
-	>
-		<input
-			type="checkbox"
 			class="mt-0.5 h-4 w-4 accent-amber-400"
-			checked={training}
-			onchange={toggleTraining}
+			checked={learning}
+			onchange={toggleLearning}
 		/>
 		<span>
-			<span class="font-semibold">Training coach</span>
+			<span class="font-semibold">Learning mode</span>
 			<span class="mt-0.5 block text-white/50">
-				Adds a “Learn” button at the table. Each player can open it for plain-language help about
-				the up-card, meld, and whose-turn / follow-suit rules for whatever's on the table right now.
+				For players still getting the hang of it. The game enforces follow-suit so you can't renege,
+				and a “Learn” button at the table gives each player plain-language help about the up-card,
+				meld, and whose-turn rules for whatever's on the table right now.
+				<br />
+				Leave it off for the normal game: players may play any card, and an illegal one only costs the
+				hand if the other team calls the renege before the last trick. Set this before the deal; it's
+				locked once the game starts.
 			</span>
 		</span>
 	</label>

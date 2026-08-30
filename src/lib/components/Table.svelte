@@ -399,11 +399,11 @@
 			{/if}
 		</div>
 
-		{#if advanced}
+		{#if !advanced}
 			<span
-				class="absolute right-3 bottom-16 rounded-lg bg-red-500/20 px-2 py-1 text-[11px] text-red-200 ring-1 ring-red-400/40"
+				class="absolute right-3 bottom-16 rounded-lg bg-amber-400/20 px-2 py-1 text-[11px] text-amber-200 ring-1 ring-amber-300/40"
 			>
-				Advanced (renege)
+				Learning mode
 			</span>
 		{/if}
 
