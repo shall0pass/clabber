@@ -92,27 +92,18 @@
 		return teamOf(mySeat) === team ? 'Your team' : 'The other team';
 	}
 
-	// Advanced mode: playing an illegal card might be a renege, so make it a
-	// deliberate two-step — tap the card, then confirm.
-	let pendingRenege = $state<CardT | null>(null);
 	function play(card: CardT) {
 		if (mySeat == null) return;
+		// Advanced mode: an illegal card is allowed through without a warning —
+		// it only matters if the other team calls the renege.
 		const illegal = !myLegal.includes(card);
-		if (illegal && advanced) {
-			pendingRenege = card;
-			return;
-		}
-		store.tryChange({ type: 'PlayCard', seat: mySeat, card });
+		store.tryChange({
+			type: 'PlayCard',
+			seat: mySeat,
+			card,
+			...(illegal && advanced ? { allowIllegal: true } : {})
+		});
 	}
-	function confirmRenege() {
-		if (mySeat == null || pendingRenege == null) return;
-		store.tryChange({ type: 'PlayCard', seat: mySeat, card: pendingRenege, allowIllegal: true });
-		pendingRenege = null;
-	}
-	// Drop a half-made renege choice as soon as it stops being our turn.
-	$effect(() => {
-		if (!handActive) pendingRenege = null;
-	});
 
 	// Calling a renege is a standing option during Advanced play — you decide,
 	// from your own read of the table, whether the other team played an illegal
@@ -304,7 +295,7 @@
 						it.
 					</p>
 				{/if}
-				{#if mayCallRenege && !pendingCall && !pendingRenege}
+				{#if mayCallRenege && !pendingCall}
 					<button
 						onclick={() => (pendingCall = true)}
 						class="rounded-lg bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-200 ring-1 ring-red-400/40 hover:bg-red-500/25"
@@ -333,31 +324,6 @@
 								class="rounded-lg bg-red-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-400"
 							>
 								Call renege
-							</button>
-						</div>
-					</div>
-				{/if}
-				{#if pendingRenege}
-					<div
-						class="flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/50"
-					>
-						<p class="text-sm text-red-100">
-							<span class="font-semibold">{pendingRenege}</span> breaks the follow rules. Play it
-							anyway? It stands unless {teamName(mySeat != null ? teamOf(mySeat) ^ 1 : 1)} catches it
-							— then they score 162 plus their meld and the hand ends.
-						</p>
-						<div class="flex gap-2">
-							<button
-								onclick={() => (pendingRenege = null)}
-								class="rounded-lg bg-white/10 px-4 py-1.5 text-sm font-semibold hover:bg-white/20"
-							>
-								Cancel
-							</button>
-							<button
-								onclick={confirmRenege}
-								class="rounded-lg bg-red-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-400"
-							>
-								Play it
 							</button>
 						</div>
 					</div>
