@@ -166,21 +166,33 @@
 		if (mySeat != null) store.tryChange({ type: 'CallBella', seat: mySeat });
 	}
 
-	// brief banner when the first trick resolves the meld
+	// Brief banner when trick two resolves the meld — shown once per hand for
+	// ~3.5 s. Keyed on `doc.seed` so it fires once, and cleared the moment a new
+	// hand un-resolves the meld (otherwise a prior hand's line lingers, because
+	// `melds.resolved` stays true through the rest of this hand and an $effect
+	// cleanup would keep cancelling the auto-clear).
 	let meldBanner = $state('');
+	let meldBannerSeed = '';
+	let meldBannerTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
-		// `scoredTeam` only reflects who won the run/set comparison, so it stays
-		// `null` on a bella-only hand even though `points` already has bella's
-		// 20 added in — key off `points` instead so that case still announces.
-		if (doc?.melds.resolved && (doc.melds.points[0] > 0 || doc.melds.points[1] > 0)) {
-			const parts = ([0, 1] as const)
-				.filter((t) => doc.melds.points[t] > 0)
-				.map((t) => `${teamName(t)} scored ${doc.melds.points[t]} for meld`);
-			meldBanner = parts.join(' · ');
-			const id = setTimeout(() => (meldBanner = ''), 3500);
-			return () => clearTimeout(id);
+		if (!doc) return;
+		// `scoredTeam` stays `null` on a bella-only hand even though `points`
+		// already has bella's 20 — key off `points` so that case still announces.
+		const scored = doc.melds.resolved && (doc.melds.points[0] > 0 || doc.melds.points[1] > 0);
+		if (!scored) {
+			if (meldBanner) meldBanner = '';
+			return;
 		}
+		if (meldBannerSeed === doc.seed) return;
+		meldBannerSeed = doc.seed;
+		meldBanner = ([0, 1] as const)
+			.filter((t) => doc.melds.points[t] > 0)
+			.map((t) => `${teamName(t)} scored ${doc.melds.points[t]} for meld`)
+			.join(' · ');
+		clearTimeout(meldBannerTimer);
+		meldBannerTimer = setTimeout(() => (meldBanner = ''), 3500);
 	});
+	$effect(() => () => clearTimeout(meldBannerTimer));
 
 	// Immediate table-wide callout the moment someone declares a meld or bella
 	// (trick one) — at a real table you'd hear this said out loud right away,
