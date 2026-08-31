@@ -1,0 +1,279 @@
+# Clabber — Test & Fix Plan for the "Items to verify"
+
+This plan turns the two open items in `implementation-plan.md` (§ "Items to
+verify") into concrete work: a root-cause review, the fix to make, and the tests
+that prove it. Both items must end green on `npm run lint`, `npm run check`,
+`npm test`, `npm run build`.
+
+| # | Item | Type | Primary artefact |
+| - | ---- | ---- | ---------------- |
+| 1 | Icon & control placement across screen sizes — buttons always clickable | Layout / responsive | `src/lib/components/*.svelte` + a viewport matrix |
+| 2 | "I don't always see my partner's meld when it is called" | Correctness / UI state | `Table.svelte` meld surfacing + a persistent per‑seat indicator |
+
+---
+
+## Item 1 — Icons & controls are always reachable and clickable
+
+### Definition of done
+
+For every supported viewport and every game phase:
+
+- No interactive control (button, checkbox, pencil/icon button, card) is
+  clipped by the viewport edge, and no control needs a horizontal scroll to
+  reach. The game root never scrolls horizontally at ≥ 320 px.
+- Every primary action has a hit target ≥ 44×44 px; secondary/icon controls
+  ≥ 24×24 px (WCAG 2.5.8).
+- No fixed/absolute overlay (chat, log, coach, scoreboard, "Learning mode"
+  badge, offline banner, modals) covers a control the player needs in that
+  phase. `document.elementFromPoint(centre)` on each visible control returns
+  that control or a descendant.
+- Tapping each control through Playwright at each viewport produces the
+  expected state change.
+
+### Current layout / overlap inventory
+
+Fixed & absolute layers in the game view (stacking order matters):
+
+| Layer | Where | Position / z |
+| ----- | ----- | ------------ |
+| Offline banner | `routes/+page.svelte:108` | `fixed inset-x-0 top-0 z-50` |
+| GameOver modal | `components/GameOver.svelte:28` | `fixed inset-0 z-50` |
+| Hand‑scored modal | `components/Scoreboard.svelte:137` | `fixed inset-0 z-30` |
+| ChatBox (toggle + open panel `h-80 w-72`) | `components/ChatBox.svelte:88` | `fixed right-3 bottom-3 z-30` |
+| CoachPanel (toggle + open panel `max-h-[65vh] w-80`) | `components/CoachPanel.svelte:34` | `fixed bottom-2 left-2 z-30` |
+| LogFeed (toggle + open panel `w-64 max-h-44`) | `components/LogFeed.svelte:29` | `fixed bottom-2 left-2 z-20` |
+| Scoreboard pill | `components/Table.svelte:296` | `absolute top-3 right-3 z-20` |
+| Leave button + "running the computer players" | `components/Table.svelte:299` | `absolute top-3 left-3 z-10` |
+| "Learning mode" badge | `components/Table.svelte:495` | `absolute right-3 bottom-16`, **no z** |
+| In‑flow action bar: **Show meld / Call bella / Call renege** | `components/Table.svelte:426` | normal flow, centred above the hand |
+| `MyHand` cards | `components/MyHand.svelte:112` | `absolute bottom-0`; lifted card `z-10` |
+
+`uiScale` and `isNarrow` come from `Table.svelte:246-258`
+(`uiScale = clamp(0.58, innerWidth/720, 1)`, `isNarrow = innerWidth < 640`).
+`ChatBox` is mounted for **both** the lobby and the game (`+page.svelte:125`).
+
+### Known / suspected problems (confirm or clear each with the checks below)
+
+1. **ChatBox open panel (`z-30`, bottom‑right) covers the in‑flow action bar**
+   (Show meld / Call bella / Call renege) and the right‑hand `MyHand` cards on
+   narrow/short screens — the panel is 288 px wide and 320 px tall and wins on
+   z‑index over the lifted card's `z-10`.
+2. **CoachPanel open panel (`z-30`, bottom‑left, `w-80`)** overlaps the left
+   `MyHand` cards / lifted card at small widths. In the default *Learning mode*
+   both CoachPanel and LogFeed live in the same corner.
+3. **"Learning mode" badge** (`absolute right-3 bottom-16`, no z‑index) sits over
+   the hand region and just above the collapsed ChatBox pill; it can overlap the
+   right edge of `MyHand` or the action bar on small screens.
+4. **Two `z-30` siblings**: the hand‑scored modal and ChatBox. On a short
+   viewport the modal's "Next hand" / "Continue" button (bottom of a
+   `max-h-[90vh]` card) can land under the ChatBox pill.
+5. **`min-h-screen` column, no inner scroll**: on landscape phones
+   (`844×390`) the table + hand + bidding/meld panel stack taller than the
+   viewport, pushing "Play (♦)" / "Pass" / "Call meld" / "Continue →" below the
+   fold with only body scroll to recover them.
+6. **Scoreboard pill vs the top opponent's plate**: both occupy the top‑right of
+   the grid on narrow screens; the pill (`z-20`) covers the partner's name /
+   turn glow (cosmetic, not a control — record but low priority).
+7. **Lobby**: seat "Sit here" buttons, the pencil rename, the copy‑code button
+   and the "Fill empty seats" / "Deal" row at 320 px.
+
+### Viewport matrix
+
+| Label | Size | Notes |
+| ----- | ---- | ----- |
+| Small phone | 320 × 568 | hard minimum |
+| Phone | 390 × 844 | iPhone‑class portrait |
+| Large phone | 414 × 896 | |
+| Phone landscape | 844 × 390 | worst case for vertical stacking |
+| Tablet | 768 × 1024 | `isNarrow` boundary is 640 |
+| Desktop | 1280 × 800 | |
+
+### Automated checks
+
+**A. Per‑component clickability — `src/lib/components/responsive.svelte.spec.ts`
+(new, `client`/chromium project).**
+
+For each of `JoinScreen`, `Lobby`, `BiddingPanel`, `MeldPanel`,
+`Scoreboard` (with a `handScored` doc so the modal renders), `GameOver`,
+`ChatBox` (forced open): render with a faked `store` (see
+`GameOver.svelte.spec.ts` for the `fakeStore` pattern), set `window.innerWidth`
+and dispatch `resize`, then for every `getByRole('button')` / `getByRole('checkbox')`:
+
+- assert `boundingBox()` is within `[0, innerWidth]` horizontally and has
+  `width ≥ 24 && height ≥ 24`;
+- assert `document.elementFromPoint(cx, cy)` is the element or contained by it;
+- click it and assert the wired callback / `store.tryChange` fired.
+
+Loop the widths `[320, 360, 390, 768, 1280]`.
+
+**B. Cross‑layer overlap — ad‑hoc Playwright script (documented here, not part of
+`npm test`).** Drive `npm run dev` with `?fast`, one Playwright‑controlled human
++ three host bots (same shape as the Phase 5 full‑game E2E). At `360×640` and at
+`844×390`, in phases `meld`, `trick` (1 and 2), `trickDone`, `handScored`,
+`gameOver`, with **ChatBox + CoachPanel + LogFeed all open**:
+
+- every enabled `MyHand` card and every visible action button passes the
+  `elementFromPoint` hit test and a real `.click()` changes state;
+- `document.scrollingElement.scrollWidth === clientWidth` (no horizontal
+  scroll);
+- the `handScored` "Next hand" button and the `trickDone` "Continue →" button
+  are not covered by any bottom‑corner panel.
+
+### Fixes likely required (finalise after A/B)
+
+- Give the "Learning mode" badge a place in normal flow (e.g. next to the
+  Scoreboard) or a `z` below the action bar and clear of `MyHand`.
+- Below `sm`, auto‑collapse ChatBox / CoachPanel / LogFeed, or make them
+  mutually exclusive, or raise the in‑flow action bar and `MyHand` into their
+  own stacking context above `z-30`.
+- Bump the hand‑scored modal to `z-40` so it clears ChatBox.
+- On short/landscape viewports let the table area scroll within itself (or drop
+  opponent fans / lower the `uiScale` floor) so the action bar stays on screen.
+- Add an `overflow-x: hidden` guard on the game and lobby roots; verify no
+  horizontal scrollbar at 320 px.
+
+### Manual checklist (record pass/fail per cell)
+
+For each viewport × phase: Join · Lobby · Bidding · Meld · Trick · Trick‑done ·
+Hand‑scored modal · Game‑over. Tap **every** control; confirm nothing is
+clipped, hidden, or under an overlay, and the pencil/robot/dealer/turn icons
+render at the right size.
+
+---
+
+## Item 2 — Every player sees a meld the moment it's called, and while it's shown
+
+### Expected behaviour (from the rules doc + plan §8.5)
+
+- **Trick one — a meld is *called*.** Every player is told *that* a seat holds a
+  meld (and/or bella), immediately, and can still see it for the rest of the
+  hand — not just for a few seconds. The suit is **not** announced on the call
+  (`reducer.ts:352` keeps the log kind‑only; keep that).
+- **Trick two — a meld is *shown*.** On each melding seat's turn the actual
+  cards are revealed to everyone for a readable window (~10 s per the code
+  comment) before that seat plays.
+- **After trick two** the "Team X scored N for meld" result is announced.
+
+### Root causes in the current code
+
+All in `src/lib/components/Table.svelte`:
+
+1. **The call is a 3.5 s toast only** — `announceBanner` (`Table.svelte:184-205`).
+   Nothing persists on the table, so a player who looks away misses their
+   partner's call entirely, and there is no per‑seat record afterwards.
+   `PlayerPlate.svelte` has no meld indicator at all.
+2. **The toast shows only the first new meld** — `added.find(...)`
+   (`Table.svelte:197`). A seat that declares two melds in one change (bots do:
+   `announceMeld` pushes one log line per meld, `reducer.ts:342`) announces just
+   one of them.
+3. **The trick‑two reveal is a single slot that later shows overwrite** —
+   `meldReveal` (`Table.svelte:207-230`). Seats show in turn order ~0.5–1.2 s
+   apart (bot delay); each new `shownDone` seat reassigns `meldReveal`, so a
+   partner's reveal that is followed by an opponent's can flash for well under a
+   second instead of the intended 10 s. **This is the most likely literal cause
+   of "I don't always see my partner's meld."**
+4. **Timer leaks / stale banners** — the `announceBanner` and `meldReveal`
+   `$effect`s call `setTimeout` without a cleanup return, so a hand reset or
+   fast re‑fire can leave a stale banner or clear the wrong reveal.
+5. **`meldBanner`** (the post‑trick‑two result, `Table.svelte:168-182`) is also
+   a 3.5 s transient with no lasting record.
+
+### Fix design
+
+**Primary: a persistent, per‑seat meld indicator visible to everyone.**
+
+Add a pure selector to `src/lib/clabber/meld.ts`:
+
+```ts
+export interface SeatMeldStatus {
+  declaredCount: number;      // melds this seat has called this hand
+  bella: boolean;             // melds.bella === seat
+  shown: MeldClaim[];         // populated once this seat has had its trick-two show
+  forfeited: boolean;         // shownDone with a declared meld but nothing shown
+  publicPoints: number | null;// null until shown (don't leak strength/suit on the call)
+}
+export function seatMeldStatus(doc: GameDoc, seat: Seat): SeatMeldStatus;
+```
+
+Render it as a small chip on `PlayerPlate.svelte` (and the local player's plate):
+`bella` / `meld` / `meld ×2` before the show; `dad · 20`, `fifty · 50`, …
+after the seat's show; `meld —` struck through on forfeit. The chip is present
+from the call through `handScored`. Keep the immediate `announceBanner` for the
+"heard out loud" moment, but it is no longer the only signal.
+
+**Secondary:**
+
+- **Reveal queue.** Replace the single `meldReveal` with a FIFO queue; show each
+  entry for a fixed `MELD_REVEAL_MS` (≈ 6000) and only then advance, so a
+  fast follow‑up show can't cut a partner's reveal short. Clear the queue on
+  `doc.seed` change and on unmount.
+- **All matches, not the first.** `added.find` → `added.filter`; surface every
+  new call (join names with ` · ` or enqueue each).
+- **Timer hygiene.** Both `$effect`s `return () => clearTimeout(...)`.
+- **Bella parity.** The persistent chip shows `bella` for `melds.bella === seat`
+  for every viewer (covers "all players should know if bella is called").
+
+No reducer/state‑shape change is required — `doc.melds.declared`,
+`doc.melds.bella`, `doc.melds.shown`, `doc.melds.shownDone` already persist for
+the whole hand and already converge across peers. This item is a
+**presentation** fix over existing shared state.
+
+### Tests
+
+**Pure unit — `src/lib/clabber/meld.spec.ts` (node).** `seatMeldStatus` for:
+
+- nothing called → all‑zero status;
+- one `DeclareMeld` → `declaredCount 1`, `publicPoints null`, `bella false`;
+- two declares → `declaredCount 2`;
+- declare + separate bella call → `bella true`, `declaredCount` unchanged;
+- bella‑only hand → `bella true`, `declaredCount 0`;
+- "dad 'a' belle" (J‑Q‑K trump, auto‑bella at `reducer.ts:386`) → `bella true`;
+- after the seat's `ShowMeld` → `shown` populated, `publicPoints` = sum;
+- played trick‑two card without showing → `forfeited true`, `shown []`;
+- after `resolveShownMelds` → status still reflects what was shown.
+
+**Reducer — `src/lib/clabber/reducer.spec.ts` (node).** Add explicit
+persistence assertions (guards against a future refactor dropping the state the
+UI now depends on): after `AnnounceMeld` / `DeclareMeld`, `doc.melds.declared[seat]`
+and `doc.melds.bella` are still readable at `bid`‑free phases `meld`, `trick`
+(1 & 2), `trickDone`, `handScored`. Keep the existing "never announces the suit"
+test (`reducer.spec.ts:548`).
+
+**Component — `src/lib/components/PlayerPlate.svelte.spec.ts` (new, chromium).**
+With a `meld` prop: renders `meld`, `meld ×2`, `bella`, `dad · 20` (after show),
+struck `meld` (forfeit); renders nothing when the seat has no meld.
+
+**Component — `src/lib/components/Table.svelte.spec.ts` (new, chromium) or an
+extension using a faked `store`/`presence`/`host`:**
+
+- partner (seat 2) has `declared[2] = [dad]`, local seat 0: seat 2's plate shows
+  a `meld` chip in phase `meld`, and it is **still present** in `trick` #1,
+  `trick` #2, `trickDone`, and `handScored`.
+- reveal queue: push two `shownDone` transitions in consecutive store snapshots
+  with fake timers → reveal #1 stays ≥ `MELD_REVEAL_MS` before reveal #2
+  appears, and both render their cards.
+- `announceBanner`: one store update that appends two `declares` log lines →
+  the banner names both melds.
+
+**E2E (ad‑hoc Playwright, documented, not in `npm test`).** One human + three
+bots, `?fast`: during trick two the human sees each revealed meld for its full
+window, and every melding seat keeps its plate chip until the hand‑scored
+screen.
+
+---
+
+## Execution order
+
+1. Item 2 pure selector + `meld.spec.ts` / `reducer.spec.ts` (fast, no UI).
+2. Item 2 `PlayerPlate` chip + its spec; wire into `Table.svelte`; reveal queue
+   + `Table` spec.
+3. Item 1 check A (`responsive.svelte.spec.ts`) — let failures drive the CSS/z
+   fixes listed above.
+4. Item 1 check B + both manual checklists on the six viewports.
+5. Green gate, then update `implementation-plan.md` §"Items to verify" to point
+   at the shipped fixes.
+
+## Green gate
+
+`npm run lint` · `npm run check` · `npm test` (111 today → +≈12) ·
+`npm run build`.

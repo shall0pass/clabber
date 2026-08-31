@@ -751,15 +751,8 @@ The app is an installable PWA named **Clabber**:
 
   # Items to verify
 
-  1.  If everyone passes on the first up card to call trump, a second round for a user to choose a different trump suit should follow.
-  2. You don't not have to call Belle until the last card of your Belle is played.
-  3. The first hand being played where players play cards is where players may declare a meld.
-  4. The second hand being played where players play cards is where players must show their declared meld if it superior to any previously declared meld before that players second card is played. Only show the meld for 10 seconds.
-  5. If you have dad-of-bell (A,K,Q of trump or J,Q,K of trump, or 50 or 100 of belle) you don't have to call belle at your last card in order to score the additional 20 points.
-  7. All players should know if bella or a meld is called.
-  8. The cards shown for previous tricks are very small, allow a finger or mouse to hover over the cards to enlarge it to see easier.
-  9. When calling a meld, do not announce the suite.
-  10. On the last hand point screen, do not enforce a 15 second delay.  Continue must be pressed to move on. The option to call a renege is available to all players.  All players must press continue to move on.  If a renege is called, all tricks should be displayed for users to see and the player who called renege should be highlighted.
-  11. All players need to press continue at the end of each trick, not just one person.
-  12. Remove the face up cards under the player who won the trick.
-  
+  1.  Verify the icon and user interaction placements on various screen sizes to ensure buttons are always clickable.
+  2. I don't always see my partner's meld when it is called.  Ensure that every player sees the called meld during the hand it is to be shown.
+
+  The review, fix design and test cases for both items live in
+  `docs/test-plan.md`.
