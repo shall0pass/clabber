@@ -133,7 +133,12 @@
 		{/if}
 
 		{#if isThinking}
-			<span class="text-xs text-amber-300">thinking…</span>
+			<!-- a fixed 8px dot, not the word "thinking…", so the plate doesn't
+			     grow and shrink every second as the turn walks the table -->
+			<span
+				class="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-300 motion-safe:animate-pulse"
+				title="thinking"
+			></span>
 		{:else if lastBid}
 			<span class="text-xs text-white/70">{lastBid}</span>
 		{/if}

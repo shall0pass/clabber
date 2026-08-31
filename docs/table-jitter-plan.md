@@ -47,87 +47,75 @@ Reserve the space; never re-centre toggling content. Anything that turns on and
 off gets a fixed-size home, and the persistent furniture (grid, trick area,
 hand) sits at a fixed position regardless of what those homes currently hold.
 
-## Rearrangement
+## Rearrangement — as shipped
 
-### R1 — Pin the grid; give the transients a fixed-height zone _(biggest win)_
+### R1 — Pin the grid; transients into a fixed-height slot — DONE
 
-- Middle wrapper: drop `flex-1 justify-center`. Use `justify-start` with a fixed
-  top offset (or keep `flex-1` but `justify-start`), so `.table-grid` sits at a
-  constant `y` for the whole hand.
-- Replace banners #2–4 **and** the phase panel #5 with **one status zone**
-  directly under the grid: a container with `min-height` set to its tallest
-  state (measure `MeldPanel` with the picker open — likely ~200 px) and
-  `display: grid; place-items: center`. Whatever is active renders into it; the
-  zone never resizes.
-- The three banners become an **overlay layer** inside that zone
-  (`position: absolute; inset: 0`, `pointer-events: none`, centred) so they
-  stack over the panel instead of adding flow height. Only one banner shows at a
-  time in practice; if two coincide, stack them in a small flex column that's
-  still inside the fixed zone.
+- The banners, the phase panel and the renege prompt moved out of the middle
+  flex column into one `relative min-h-14` slot (`[data-status-slot]`) under the
+  grid. The active panel / renege prompt is `absolute bottom-0` in that slot and
+  grows **upward** over the felt; the three banners are an
+  `absolute bottom-full` overlay just above it (`[data-banner-layer]`,
+  `pointer-events-none`). Nothing there adds flow height.
+- The middle wrapper keeps `flex-1 justify-center` but now holds only the grid +
+  the fixed-height slot, so the centred block height is constant and the grid's
+  `y` never moves.
+- **Also required:** `w-full` on that middle wrapper. Without a definite parent
+  width, `.table-grid`'s `min(100%, 760px)` was resolving to the grid's
+  _intrinsic_ width, so a plate gaining a "1 trick" label re-sized the whole
+  grid and re-centred it (a horizontal jitter the plan had written off). With
+  `w-full` the grid is a flat 760 px and plate width changes spill within the
+  fixed `1fr` tracks.
 
-### R2 — Freeze `PlayerPlate`'s box
+### R3 — Fix the centre column — DONE
 
-- Render "thinking…" / bid / trick-count in **fixed-width slots** that are
-  always in the DOM (`visibility: hidden` / a `min-w` spacer when inactive), so
-  the plate width is the same whether or not it's that seat's turn.
-- Prefer swapping the **"thinking…" text for a fixed 16 px indicator** (a
-  pulsing dot or a tiny spinner) — the turn is already shown by the ring glow,
-  and a growing/shrinking word every second is the most visible offender.
-- Give the plate a `min-height` so DEAL/MADE/meld-chip appearing doesn't change
-  its height. Reserve one line for the trick count from the start of the hand.
+- `grid-template-columns: minmax(0,1fr) var(--center-w) minmax(0,1fr)`, with
+  `--center-w` set from JS to the trick area's own width (mirrors TrickArea's
+  card/puck math). The partner plate (which sits in the centre column) can no
+  longer widen it and squeeze the side seats. Rows stay `auto` — the current
+  single-line plate doesn't change height, so the tracks are already stable.
 
-### R3 — Fix the grid track sizes
+### R5 — Reserve the `CardFan` footprint — DONE
 
-- `grid-template-rows: auto auto auto` → give row 1 and row 3 an explicit
-  `minmax(<plate-max + fan>, auto)` (or a flat fixed height), and row 2 the
-  TrickArea height. With R2 done, "plate-max" is a constant, so the tracks stop
-  moving.
+- New `reserve` prop; `Table` passes `reserve={6}` to the opponent fans. The box
+  is sized for `reserve` cards and the `count` shown cards are centred within it,
+  so a seat's fan stays put as the hand depletes.
 
-### R4 — Reserve the bottom action row
+### R2 — Freeze `PlayerPlate`'s box — PARTIAL
 
-- `<div class="… min-h-[36px]">` on the Show-meld/Call-bella/Call-renege row
-  ([Table.svelte:457](../src/lib/components/Table.svelte#L457)) so it holds its
-  height when empty. Better: fold these buttons into the R1 status zone (they're
-  turn-scoped actions like the panels) and keep the bottom column = plate + hand
-  only, both fixed-size.
-- `pendingCall` (#10): render it as an overlay/popover rather than an inserted
-  block, or inside the reserved zone.
+- "thinking…" (a ~55 px word that toggled on every turn change) → a fixed 8 px
+  pulsing dot. That was the loudest offender.
+- The fuller freeze (fixed-width slots for bid / trick-count, plate
+  `min-height`) is **not done** — with R1 + R3 in place those changes no longer
+  move the table, only make the individual plate breathe slightly. Left as
+  follow-up if it still reads as jittery on device.
 
-### R5 — Reserve the `CardFan` footprint
+### R4 — Reserve the bottom action row — DONE
 
-- Add a `reserve` prop (max hand size, 6) so `boxW`/`boxH` are computed from
-  `reserve`, not `count`; still render only `count` cards. Opponent seats then
-  keep a constant footprint all hand.
+- The Show-meld / Call-bella / Call-renege row is `min-h-9`, so it holds its
+  height when empty and never pushes `MyHand`.
+- `pendingCall` (#10) now renders in the R1 slot as an overlay, not an inserted
+  block in the bottom column.
 
 ## Tests
 
-### T1 — `Table.svelte` layout-stability spec _(new, chromium)_
+### T1 — `Table.svelte` layout stability — DONE
 
-`src/lib/components/Table.svelte.spec.ts`. Render `Table` with faked
-`store` / `presence` / `host` (see `GameOver.svelte.spec.ts` `fakeStore`;
-`presence.isOnline` → `() => true`; `host.isHost` → `false`), import
-`../../routes/layout.css` so real Tailwind applies, and `await page.viewport(w,h)`.
+`src/lib/components/Table.svelte.spec.ts`. Renders `Table` with faked
+`store` / `presence` / `host`, `import '../../routes/layout.css'`, a real
+`createGame` + `reduce` doc driven to `meld` / `trick` / `trickDone`, and
+asserts `.table-grid`'s `getBoundingClientRect()` `top` and `left` move ≤ 2 px
+across the phase-panel swap. Also asserts the banner layer and the panel
+container are `position: absolute` and the slot keeps a ≥ 48 px height. At
+1280 px for now — the 360/768 rows are still to add.
 
-Drive the faked `doc` through a scripted hand and, after each transition, read
-`document.querySelector('.table-grid').getBoundingClientRect()` and the
-TrickArea centre; assert **`top` and `left` move ≤ 1 px** across all of:
+`src/lib/components/CardFan.svelte.spec.ts` covers R5: footprint constant with
+`reserve` as `count` falls 6 → 3 → 1; still shrinks without it.
 
-- `bid1` → `bid2` → `meld` → `trick` #1 → `trickDone` → `trick` #2 …
-  → `trickDone` (#6) → `handScored`;
-- turn walking seats 0→1→2→3 within a trick (source #6);
-- `announceBanner` on/off, `meldBanner` on/off, `meldReveal` present with 3
-  cards then 5 cards then gone (source #3);
-- the bottom action row gaining/losing `Show meld` + `Call bella` (source #9).
+### T2 — `PlayerPlate` box-invariance — NOT DONE
 
-Run the matrix at `[360, 768, 1280]` wide.
-
-### T2 — `PlayerPlate` box-invariance _(extend `PlayerPlate.svelte.spec.ts`)_
-
-For a fixed `player`, snapshot `getBoundingClientRect()` of the plate, then
-re-render toggling each of `isTurn`, `isThinking`, `lastBid: 'pass'`,
-`tricks: 0→1→12`, `isDealer`, `isMaker`, `meld` (none → 1 → shown). Assert
-width and height are unchanged (± 1 px) after R2. Needs `../../routes/layout.css`
-imported for real metrics.
+Deferred with the fuller R2. With R1 + R3 the plate no longer moves the table,
+so this is only worth adding if the plate itself still reads as breathing.
 
 ### T3 — Manual, per release
 
@@ -137,14 +125,17 @@ each bid, bid→meld, meld→trick, every trick→trickDone→next trick, the tr
 reveal cycling through 2–3 melds, meld banner, hand-scored. A 1–2 px drift from
 sub-pixel rounding is fine; a visible hop is a fail.
 
-## Execution order
+## Status
 
-1. R1 (status zone + pin the grid) — clears #1–5, #10. Land T1 alongside.
-2. R2 + R3 (`PlayerPlate` box + grid tracks) — clears #6–8, #12. Land T2.
-3. R4, R5 — clears #9, #11.
-4. T3 on the three viewports.
+- **Done:** R1 (status slot + `w-full` on the middle wrapper), R3 (fixed centre
+  column), R4 (reserved action row + renege prompt as overlay), R5 (`CardFan`
+  reserve), the loud half of R2 ("thinking…" → dot). T1 + `CardFan` spec.
+- **Left:** the fuller R2 (fixed-width slots for bid / trick-count, plate
+  `min-height`) + T2, only if the plate still reads as breathing on device;
+  T1's 360 / 768 rows; T3 on all three viewports.
 
 ## Green gate
 
-`npm run lint` · `npm run check` · `npm test` · `npm run build`. Baseline
-before this work: **191 tests, 22 files**.
+`npm run lint` · `npm run check` · `npm test` · `npm run build`. Now:
+**195 tests, 24 files** (+4: `Table.svelte.spec.ts` ×2, `CardFan.svelte.spec.ts`
+×2).

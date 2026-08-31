@@ -294,6 +294,18 @@
 	});
 	const px = (n: number) => Math.round(n * uiScale);
 
+	// Pin the grid's centre column to the trick area's own width (same math as
+	// TrickArea: card 110 x scale, puck 116 x scale) so a wide or narrow partner
+	// plate -- or anything else in the centre column -- can never widen it and
+	// squeeze the side seats. The side columns are then a fixed 1fr each.
+	const centerColW = $derived.by(() => {
+		const cardH = Math.round(110 * uiScale);
+		const cardW = Math.round(cardH * (64 / 89));
+		const puck = Math.round(116 * uiScale);
+		const gap = Math.round(puck / 2 + 12 * uiScale);
+		return 2 * (gap + cardW);
+	});
+
 	// screen-reader turn announcements
 	const announcement = $derived.by(() => {
 		if (!doc || mySeat == null) return '';
@@ -334,8 +346,11 @@
 
 		<div class="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
 
-		<div class="flex flex-1 flex-col items-center justify-center gap-4">
-			<div class="table-grid">
+		<!-- `w-full` so `.table-grid`'s `min(100%, 760px)` resolves to a definite
+		     width; without it the flex column shrink-wraps and a plate that gains
+		     a "1 trick" label re-sizes the whole grid and re-centres it. -->
+		<div class="flex w-full flex-1 flex-col items-center justify-center gap-4">
+			<div class="table-grid" style:--center-w="{centerColW}px">
 				{#each SEATS as seat (seat)}
 					{#if mySeat == null || seat !== mySeat}
 						{@const slot = screenSlot(seat)}
@@ -364,6 +379,7 @@
 							/>
 							<CardFan
 								count={doc.hands[seat].length}
+								reserve={6}
 								height={px(52)}
 								vertical={isNarrow && (slot === 1 || slot === 3)}
 							/>
@@ -382,60 +398,105 @@
 				</div>
 			</div>
 
-			{#if announceBanner}
+			<!-- Everything transient lives here without reflowing the grid or the
+			     hand: the phase panel / renege prompt is anchored to the bottom of
+			     this fixed-height slot and grows upward over the felt; the banners
+			     float just above the slot. -->
+			<div
+				class="pointer-events-none relative flex min-h-14 w-full max-w-md items-start justify-center"
+				data-status-slot
+			>
 				<div
-					class="rounded-lg bg-sky-300 px-4 py-1.5 text-sm font-semibold text-green-950"
-					role="status"
+					class="absolute bottom-full left-1/2 mb-2 flex w-full -translate-x-1/2 flex-col items-center gap-2"
+					data-banner-layer
 				>
-					{announceBanner}
-				</div>
-			{/if}
-
-			{#if meldReveal}
-				{@const revealName = doc.players[meldReveal.seat]?.name ?? `seat ${meldReveal.seat}`}
-				<div
-					class="flex flex-col items-center gap-1.5 rounded-lg bg-amber-300 px-4 py-2 text-green-950"
-					role="status"
-				>
-					<span class="text-sm font-semibold">{revealName} shows meld</span>
-					<div class="flex gap-1">
-						{#each meldReveal.cards as card (card)}
-							<Card {card} height={px(60)} />
-						{/each}
-					</div>
-				</div>
-			{/if}
-
-			{#if meldBanner}
-				<div class="rounded-lg bg-amber-300 px-4 py-1.5 text-sm font-semibold text-green-950">
-					{meldBanner}
-				</div>
-			{/if}
-
-			{#if doc.phase === 'bid1' || doc.phase === 'bid2'}
-				<BiddingPanel {store} />
-			{:else if doc.phase === 'meld'}
-				<MeldPanel {store} />
-			{:else if doc.phase === 'trickDone'}
-				<div class="flex flex-col items-center gap-1">
-					{#if mySeat != null}
-						<button
-							onclick={ackTrick}
-							disabled={iAckedTrick}
-							class="rounded-lg bg-white/10 px-4 py-1.5 text-sm text-white/70 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+					{#if announceBanner}
+						<div
+							class="rounded-lg bg-sky-300 px-4 py-1.5 text-sm font-semibold text-green-950"
+							role="status"
 						>
-							{iAckedTrick ? 'Waiting for the table…' : 'Continue →'}
-						</button>
+							{announceBanner}
+						</div>
 					{/if}
-					{#if waitingOnTrick.length}
-						<p class="text-[11px] text-white/35">
-							Waiting on {waitingOnTrick.join(', ')} to press Continue.
-						</p>
+
+					{#if meldReveal}
+						{@const revealName = doc.players[meldReveal.seat]?.name ?? `seat ${meldReveal.seat}`}
+						<div
+							class="flex flex-col items-center gap-1.5 rounded-lg bg-amber-300 px-4 py-2 text-green-950"
+							role="status"
+						>
+							<span class="text-sm font-semibold">{revealName} shows meld</span>
+							<div class="flex gap-1">
+								{#each meldReveal.cards as card (card)}
+									<Card {card} height={px(60)} />
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					{#if meldBanner}
+						<div class="rounded-lg bg-amber-300 px-4 py-1.5 text-sm font-semibold text-green-950">
+							{meldBanner}
+						</div>
 					{/if}
 				</div>
-			{:else if doc.phase === 'redeal'}
-				<div class="text-sm text-white/60">Everyone passed — re-dealing…</div>
-			{/if}
+
+				<div class="absolute bottom-0 left-1/2 flex -translate-x-1/2 flex-col items-center">
+					{#if pendingCall && mySeat != null}
+						<div
+							class="pointer-events-auto flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/60"
+						>
+							<p class="text-sm text-red-100">
+								{#if advanced}
+									Call a renege on {teamName(teamOf(mySeat) ^ 1)}? If they didn't break a rule, the
+									penalty falls on {teamName(teamOf(mySeat))} instead — the other team takes 162 plus
+									any meld and the hand ends.
+								{:else}
+									Call the renege on {teamName(teamOf(mySeat) ^ 1)}? {teamName(teamOf(mySeat))} takes
+									162 plus any meld and the hand ends.
+								{/if}
+							</p>
+							<div class="flex gap-2">
+								<button
+									onclick={() => (pendingCall = false)}
+									class="rounded-lg bg-white/10 px-4 py-1.5 text-sm font-semibold hover:bg-white/20"
+								>
+									Cancel
+								</button>
+								<button
+									onclick={callRenege}
+									class="rounded-lg bg-red-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-400"
+								>
+									Call renege
+								</button>
+							</div>
+						</div>
+					{:else if doc.phase === 'bid1' || doc.phase === 'bid2'}
+						<div class="pointer-events-auto"><BiddingPanel {store} /></div>
+					{:else if doc.phase === 'meld'}
+						<div class="pointer-events-auto"><MeldPanel {store} /></div>
+					{:else if doc.phase === 'trickDone'}
+						<div class="pointer-events-auto flex flex-col items-center gap-1">
+							{#if mySeat != null}
+								<button
+									onclick={ackTrick}
+									disabled={iAckedTrick}
+									class="rounded-lg bg-white/10 px-4 py-1.5 text-sm text-white/70 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+								>
+									{iAckedTrick ? 'Waiting for the table…' : 'Continue →'}
+								</button>
+							{/if}
+							{#if waitingOnTrick.length}
+								<p class="text-[11px] text-white/35">
+									Waiting on {waitingOnTrick.join(', ')} to press Continue.
+								</p>
+							{/if}
+						</div>
+					{:else if doc.phase === 'redeal'}
+						<div class="text-sm text-white/60">Everyone passed — re-dealing…</div>
+					{/if}
+				</div>
+			</div>
 		</div>
 
 		<div class="flex w-full flex-col items-center gap-1.5">
@@ -454,7 +515,8 @@
 					tricks={teamTricks(mySeat)}
 					meld={seatMeldStatus(doc, mySeat)}
 				/>
-				<div class="flex flex-wrap justify-center gap-2">
+				<!-- reserved height so these turn-scoped buttons never push the hand -->
+				<div class="flex min-h-9 flex-wrap items-center justify-center gap-2">
 					{#if canShowMeld}
 						<button
 							onclick={showMeld}
@@ -480,36 +542,6 @@
 						</button>
 					{/if}
 				</div>
-				{#if pendingCall}
-					<div
-						class="flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/60"
-					>
-						<p class="text-sm text-red-100">
-							{#if advanced}
-								Call a renege on {teamName(teamOf(mySeat) ^ 1)}? If they didn't break a rule, the
-								penalty falls on {teamName(teamOf(mySeat))} instead — the other team takes 162 plus any
-								meld and the hand ends.
-							{:else}
-								Call the renege on {teamName(teamOf(mySeat) ^ 1)}? {teamName(teamOf(mySeat))} takes 162
-								plus any meld and the hand ends.
-							{/if}
-						</p>
-						<div class="flex gap-2">
-							<button
-								onclick={() => (pendingCall = false)}
-								class="rounded-lg bg-white/10 px-4 py-1.5 text-sm font-semibold hover:bg-white/20"
-							>
-								Cancel
-							</button>
-							<button
-								onclick={callRenege}
-								class="rounded-lg bg-red-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-400"
-							>
-								Call renege
-							</button>
-						</div>
-					</div>
-				{/if}
 				<MyHand
 					cards={myHand}
 					legal={myLegal}
@@ -548,7 +580,9 @@
 	}
 	.table-grid {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+		/* fixed centre column (set from JS to the trick area's width) so nothing
+		   in it can widen it and squeeze the side seats */
+		grid-template-columns: minmax(0, 1fr) var(--center-w, auto) minmax(0, 1fr);
 		grid-template-rows: auto auto auto;
 		gap: clamp(0.3rem, 3vw, 1.25rem) clamp(0.15rem, 3vw, 1.75rem);
 		place-items: center;
