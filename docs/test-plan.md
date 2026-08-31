@@ -5,10 +5,10 @@ verify") into concrete work: a root-cause review, the fix to make, and the tests
 that prove it. Both items must end green on `npm run lint`, `npm run check`,
 `npm test`, `npm run build`.
 
-| # | Item | Type | Primary artefact |
-| - | ---- | ---- | ---------------- |
-| 1 | Icon & control placement across screen sizes — buttons always clickable | Layout / responsive | `src/lib/components/*.svelte` + a viewport matrix |
-| 2 | "I don't always see my partner's meld when it is called" | Correctness / UI state | `Table.svelte` meld surfacing + a persistent per‑seat indicator |
+| #   | Item                                                                    | Type                   | Primary artefact                                                |
+| --- | ----------------------------------------------------------------------- | ---------------------- | --------------------------------------------------------------- |
+| 1   | Icon & control placement across screen sizes — buttons always clickable | Layout / responsive    | `src/lib/components/*.svelte` + a viewport matrix               |
+| 2   | "I don't always see my partner's meld when it is called"                | Correctness / UI state | `Table.svelte` meld surfacing + a persistent per‑seat indicator |
 
 ---
 
@@ -34,19 +34,19 @@ For every supported viewport and every game phase:
 
 Fixed & absolute layers in the game view (stacking order matters):
 
-| Layer | Where | Position / z |
-| ----- | ----- | ------------ |
-| Offline banner | `routes/+page.svelte:108` | `fixed inset-x-0 top-0 z-50` |
-| GameOver modal | `components/GameOver.svelte:28` | `fixed inset-0 z-50` |
-| Hand‑scored modal | `components/Scoreboard.svelte:137` | `fixed inset-0 z-30` |
-| ChatBox (toggle + open panel `h-80 w-72`) | `components/ChatBox.svelte:88` | `fixed right-3 bottom-3 z-30` |
-| CoachPanel (toggle + open panel `max-h-[65vh] w-80`) | `components/CoachPanel.svelte:34` | `fixed bottom-2 left-2 z-30` |
-| LogFeed (toggle + open panel `w-64 max-h-44`) | `components/LogFeed.svelte:29` | `fixed bottom-2 left-2 z-20` |
-| Scoreboard pill | `components/Table.svelte:296` | `absolute top-3 right-3 z-20` |
-| Leave button + "running the computer players" | `components/Table.svelte:299` | `absolute top-3 left-3 z-10` |
-| "Learning mode" badge | `components/Table.svelte:495` | `absolute right-3 bottom-16`, **no z** |
-| In‑flow action bar: **Show meld / Call bella / Call renege** | `components/Table.svelte:426` | normal flow, centred above the hand |
-| `MyHand` cards | `components/MyHand.svelte:112` | `absolute bottom-0`; lifted card `z-10` |
+| Layer                                                        | Where                              | Position / z                            |
+| ------------------------------------------------------------ | ---------------------------------- | --------------------------------------- |
+| Offline banner                                               | `routes/+page.svelte:108`          | `fixed inset-x-0 top-0 z-50`            |
+| GameOver modal                                               | `components/GameOver.svelte:28`    | `fixed inset-0 z-50`                    |
+| Hand‑scored modal                                            | `components/Scoreboard.svelte:137` | `fixed inset-0 z-30`                    |
+| ChatBox (toggle + open panel `h-80 w-72`)                    | `components/ChatBox.svelte:88`     | `fixed right-3 bottom-3 z-30`           |
+| CoachPanel (toggle + open panel `max-h-[65vh] w-80`)         | `components/CoachPanel.svelte:34`  | `fixed bottom-2 left-2 z-30`            |
+| LogFeed (toggle + open panel `w-64 max-h-44`)                | `components/LogFeed.svelte:29`     | `fixed bottom-2 left-2 z-20`            |
+| Scoreboard pill                                              | `components/Table.svelte:296`      | `absolute top-3 right-3 z-20`           |
+| Leave button + "running the computer players"                | `components/Table.svelte:299`      | `absolute top-3 left-3 z-10`            |
+| "Learning mode" badge                                        | `components/Table.svelte:495`      | `absolute right-3 bottom-16`, **no z**  |
+| In‑flow action bar: **Show meld / Call bella / Call renege** | `components/Table.svelte:426`      | normal flow, centred above the hand     |
+| `MyHand` cards                                               | `components/MyHand.svelte:112`     | `absolute bottom-0`; lifted card `z-10` |
 
 `uiScale` and `isNarrow` come from `Table.svelte:246-258`
 (`uiScale = clamp(0.58, innerWidth/720, 1)`, `isNarrow = innerWidth < 640`).
@@ -59,7 +59,7 @@ Fixed & absolute layers in the game view (stacking order matters):
    narrow/short screens — the panel is 288 px wide and 320 px tall and wins on
    z‑index over the lifted card's `z-10`.
 2. **CoachPanel open panel (`z-30`, bottom‑left, `w-80`)** overlaps the left
-   `MyHand` cards / lifted card at small widths. In the default *Learning mode*
+   `MyHand` cards / lifted card at small widths. In the default _Learning mode_
    both CoachPanel and LogFeed live in the same corner.
 3. **"Learning mode" badge** (`absolute right-3 bottom-16`, no z‑index) sits over
    the hand region and just above the collapsed ChatBox pill; it can overlap the
@@ -71,17 +71,18 @@ Fixed & absolute layers in the game view (stacking order matters):
    (`844×390`) the table + hand + bidding/meld panel stack taller than the
    viewport, pushing "Play (♦)" / "Pass" / "Call meld" / "Continue →" below the
    fold with only body scroll to recover them.
-6. **The Scoreboard buries the "Leave table" button on narrow screens
-   (confirmed).** The top bar is two independent `absolute` islands —
-   `LeaveButton` at `top-3 left-3 z-10` ([Table.svelte:299](../src/lib/components/Table.svelte#L299))
-   and `Scoreboard` at `top-3 right-3 z-20` ([Table.svelte:296](../src/lib/components/Table.svelte#L296)).
-   The Scoreboard's right‑aligned expanded panel is `w-72` (288 px) capped only
-   at `calc(100vw − 1.5rem)` ([Scoreboard.svelte:89](../src/lib/components/Scoreboard.svelte#L89)).
-   At 375 px (iPhone SE) the open panel spans x ≈ 75–363 and paints **over** the
-   Leave button (x ≈ 12–86) because it has the higher `z`; at 320 px it covers
-   the entire top row. Even collapsed, a 3‑digit score ("We 240 — They 315")
-   grows the pill far enough left to overlap the button at ≤ 360 px. A hidden
-   control, not a cosmetic clip — **high priority**.
+6. **The Scoreboard buries the "Leave table" button on narrow screens —
+   FIXED.** The top bar was two independent `absolute` islands (`LeaveButton`
+   `top-3 left-3 z-10`, `Scoreboard` `top-3 right-3 z-20`) and the score panel
+   (`w-72`, capped only at `calc(100vw − 1.5rem)`) opened straight over the
+   Leave button: at 375 px it spanned x ≈ 75–363 across the button at x ≈ 12–86;
+   at 320 px it covered the whole row. **Fix shipped:** the two are now flex
+   siblings in a single `GameTopBar.svelte` row (`flex flex-wrap items-start
+justify-between`, Leave group `shrink-0`), the score sheet is a width‑capped
+   `absolute` dropdown (`max-w-[calc(100vw-7rem)]`), and `LeaveButton` padding
+   was bumped to a ≥ 24 px tap target. Regression test:
+   `GameTopBar.svelte.spec.ts` (check A′). Still needs an on‑device visual pass
+   for the wrapped state.
 7. **Scoreboard pill vs the top opponent's plate**: both occupy the top‑right of
    the grid on narrow screens; the pill (`z-20`) covers the partner's name /
    turn glow (cosmetic — record, low priority).
@@ -90,15 +91,15 @@ Fixed & absolute layers in the game view (stacking order matters):
 
 ### Viewport matrix
 
-| Label | Size | Notes |
-| ----- | ---- | ----- |
-| Small phone | 320 × 568 | hard minimum (iPhone SE 1st gen) |
-| iPhone SE | 375 × 667 | SE 2nd/3rd gen — the reported failure case |
-| Phone | 390 × 844 | iPhone‑class portrait |
-| Large phone | 414 × 896 | |
-| Phone landscape | 844 × 390 | worst case for vertical stacking |
-| Tablet | 768 × 1024 | `isNarrow` boundary is 640 |
-| Desktop | 1280 × 800 | |
+| Label           | Size       | Notes                                      |
+| --------------- | ---------- | ------------------------------------------ |
+| Small phone     | 320 × 568  | hard minimum (iPhone SE 1st gen)           |
+| iPhone SE       | 375 × 667  | SE 2nd/3rd gen — the reported failure case |
+| Phone           | 390 × 844  | iPhone‑class portrait                      |
+| Large phone     | 414 × 896  |                                            |
+| Phone landscape | 844 × 390  | worst case for vertical stacking           |
+| Tablet          | 768 × 1024 | `isNarrow` boundary is 640                 |
+| Desktop         | 1280 × 800 |                                            |
 
 ### Automated checks
 
@@ -108,45 +109,54 @@ Fixed & absolute layers in the game view (stacking order matters):
 For each of `JoinScreen`, `Lobby`, `BiddingPanel`, `MeldPanel`,
 `Scoreboard` (with a `handScored` doc so the modal renders), `GameOver`,
 `ChatBox` (forced open): render with a faked `store` (see
-`GameOver.svelte.spec.ts` for the `fakeStore` pattern), set `window.innerWidth`
-and dispatch `resize`, then for every `getByRole('button')` / `getByRole('checkbox')`:
+`GameOver.svelte.spec.ts` for the `fakeStore` pattern), set the viewport with
+`await page.viewport(w, h)`, then for every `getByRole('button')` /
+`getByRole('checkbox')`:
 
-- assert `boundingBox()` is within `[0, innerWidth]` horizontally and has
+- assert `getBoundingClientRect()` is within `[0, w]` horizontally and has
   `width ≥ 24 && height ≥ 24`;
 - assert `document.elementFromPoint(cx, cy)` is the element or contained by it;
 - click it and assert the wired callback / `store.tryChange` fired.
 
 Loop the widths `[320, 360, 375, 390, 768, 1280]`.
 
-**A′. Top‑bar collision (regression for item 6).** Render `LeaveButton` and
-`Scoreboard` together in the same `absolute top-3` bar markup `Table.svelte`
-uses, **open the Scoreboard**, and at widths `[320, 360, 375]` — with both a
-1‑digit and a 3‑digit running score — assert the `Leave table` button still
-passes the `boundingBox` / `elementFromPoint` / real‑click checks (i.e. the
-score panel does not overlap or cover it).
+> **CSS in component tests.** `vitest-browser-svelte` renders with **no
+> stylesheet**, so `flex` / `absolute` / `w-72` / `calc(100vw…)` do nothing and
+> a geometric test is meaningless. Import the Tailwind entry at the top of the
+> spec — `import '../../routes/layout.css';` — and `@tailwindcss/vite` injects
+> the real utilities. `GameTopBar.svelte.spec.ts` does this.
+
+**A′. Top‑bar collision (regression for item 6) — DONE:
+`src/lib/components/GameTopBar.svelte.spec.ts`.** Renders `GameTopBar` (which
+composes `LeaveButton` + `Scoreboard`), opens the score sheet, and at widths
+`[320, 360, 375, 1280]` × `{1‑digit, 3‑digit}` score asserts the `Leave table`
+button: is a ≥ 24 px target, is inside the viewport, does **not** intersect the
+open panel's rect, is what `elementFromPoint` returns at its centre, and still
+drives `onleave` end to end.
 
 **B. Cross‑layer overlap — ad‑hoc Playwright script (documented here, not part of
 `npm test`).** Drive `npm run dev` with `?fast`, one Playwright‑controlled human
-+ three host bots (same shape as the Phase 5 full‑game E2E). At `360×640` and at
-`844×390`, in phases `meld`, `trick` (1 and 2), `trickDone`, `handScored`,
-`gameOver`, with **ChatBox + CoachPanel + LogFeed all open**:
 
-- every enabled `MyHand` card and every visible action button passes the
+- three host bots (same shape as the Phase 5 full‑game E2E). At `360×640` and at
+  `844×390`, in phases `meld`, `trick` (1 and 2), `trickDone`, `handScored`,
+  `gameOver`, with **ChatBox + CoachPanel + LogFeed all open**:
+
+* every enabled `MyHand` card and every visible action button passes the
   `elementFromPoint` hit test and a real `.click()` changes state;
-- `document.scrollingElement.scrollWidth === clientWidth` (no horizontal
+* `document.scrollingElement.scrollWidth === clientWidth` (no horizontal
   scroll);
-- the `handScored` "Next hand" button and the `trickDone` "Continue →" button
+* the `handScored` "Next hand" button and the `trickDone` "Continue →" button
   are not covered by any bottom‑corner panel.
 
 ### Fixes likely required (finalise after A/B)
 
-- **Top bar (item 6).** Replace the two `absolute` islands with one
-  `absolute inset-x-3 top-3` `flex items-start justify-between gap-2` row, the
-  Leave group `shrink-0` and in the higher stacking context. Cap the Scoreboard
-  panel at `max-w-[calc(100vw-7rem)]` so it always leaves room for the button,
-  or, below `sm`, render the score sheet as a centred sheet/modal like the
-  hand‑scored one. Either way the expanded panel gets `z-40` and must never
-  reduce the Leave button's hit box.
+- **Top bar (item 6) — DONE.** `LeaveButton` + `Scoreboard` now live in one
+  `GameTopBar.svelte` flex row (`absolute inset-x-3 top-3 z-20 flex flex-wrap
+items-start justify-between gap-2`, Leave group `shrink-0`, Scoreboard wrapper
+  `ml-auto min-w-0`). The score sheet is an `absolute top-full right-0 z-30`
+  dropdown capped at `max-w-[calc(100vw-7rem)]`, so it never widens the bar or
+  reaches the Leave button; if the row can't fit it wraps instead. `LeaveButton`
+  padding bumped to a ≥ 24 px target.
 - Give the "Learning mode" badge a place in normal flow (e.g. next to the
   Scoreboard) or a `z` below the action bar and clear of `MyHand`.
 - Below `sm`, auto‑collapse ChatBox / CoachPanel / LogFeed, or make them
@@ -176,11 +186,11 @@ computer players" line under the button).
 
 ### Expected behaviour (from the rules doc + plan §8.5)
 
-- **Trick one — a meld is *called*.** Every player is told *that* a seat holds a
+- **Trick one — a meld is _called_.** Every player is told _that_ a seat holds a
   meld (and/or bella), immediately, and can still see it for the rest of the
   hand — not just for a few seconds. The suit is **not** announced on the call
   (`reducer.ts:352` keeps the log kind‑only; keep that).
-- **Trick two — a meld is *shown*.** On each melding seat's turn the actual
+- **Trick two — a meld is _shown_.** On each melding seat's turn the actual
   cards are revealed to everyone for a readable window (~10 s per the code
   comment) before that seat plays.
 - **After trick two** the "Team X scored N for meld" result is announced.
@@ -217,11 +227,11 @@ Add a pure selector to `src/lib/clabber/meld.ts`:
 
 ```ts
 export interface SeatMeldStatus {
-  declaredCount: number;      // melds this seat has called this hand
-  bella: boolean;             // melds.bella === seat
-  shown: MeldClaim[];         // populated once this seat has had its trick-two show
-  forfeited: boolean;         // shownDone with a declared meld but nothing shown
-  publicPoints: number | null;// null until shown (don't leak strength/suit on the call)
+	declaredCount: number; // melds this seat has called this hand
+	bella: boolean; // melds.bella === seat
+	shown: MeldClaim[]; // populated once this seat has had its trick-two show
+	forfeited: boolean; // shownDone with a declared meld but nothing shown
+	publicPoints: number | null; // null until shown (don't leak strength/suit on the call)
 }
 export function seatMeldStatus(doc: GameDoc, seat: Seat): SeatMeldStatus;
 ```
@@ -239,7 +249,7 @@ from the call through `handScored`. Keep the immediate `announceBanner` for the
   fast follow‑up show can't cut a partner's reveal short. Clear the queue on
   `doc.seed` change and on unmount.
 - **All matches, not the first.** `added.find` → `added.filter`; surface every
-  new call (join names with ` · ` or enqueue each).
+  new call (join names with `·` or enqueue each).
 - **Timer hygiene.** Both `$effect`s `return () => clearTimeout(...)`.
 - **Bella parity.** The persistent chip shows `bella` for `melds.bella === seat`
   for every viewer (covers "all players should know if bella is called").
@@ -295,16 +305,21 @@ screen.
 
 ## Execution order
 
-1. Item 2 pure selector + `meld.spec.ts` / `reducer.spec.ts` (fast, no UI).
-2. Item 2 `PlayerPlate` chip + its spec; wire into `Table.svelte`; reveal queue
-   + `Table` spec.
-3. Item 1 check A (`responsive.svelte.spec.ts`) — let failures drive the CSS/z
-   fixes listed above.
-4. Item 1 check B + both manual checklists on the six viewports.
-5. Green gate, then update `implementation-plan.md` §"Items to verify" to point
+1. ~~Item 1 top bar (item 6): `GameTopBar.svelte` + `GameTopBar.svelte.spec.ts`
+   (check A′).~~ **Done.**
+2. Item 2 pure selector + `meld.spec.ts` / `reducer.spec.ts` (fast, no UI).
+3. Item 2 `PlayerPlate` chip + its spec; wire into `Table.svelte`; reveal queue
+   - `Table` spec.
+4. Item 1 check A (`responsive.svelte.spec.ts`) — let failures drive the
+   remaining CSS/z fixes listed above.
+5. Item 1 check B + both manual checklists on the seven viewports.
+6. Green gate, then update `implementation-plan.md` §"Items to verify" to point
    at the shipped fixes.
 
 ## Green gate
 
-`npm run lint` · `npm run check` · `npm test` (111 today → +≈12) ·
-`npm run build`.
+`npm run lint` · `npm run check` · `npm test` · `npm run build`. Baseline after
+the top‑bar fix: **175 tests, 21 files** (was 169; +6 from
+`GameTopBar.svelte.spec.ts`). The pre‑existing `svelte/prefer-svelte-reactivity`
+lint error on `new Set<Seat>()` in `Table.svelte` was cleared in passing
+(`SvelteSet`).

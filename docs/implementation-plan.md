@@ -750,9 +750,8 @@ The app is an installable PWA named **Clabber**:
   serves the static output as-is.
 
   # Items to verify
-
   1.  Verify the icon and user interaction placements on various screen sizes to ensure buttons are always clickable.
-  2. I don't always see my partner's meld when it is called.  Ensure that every player sees the called meld during the hand it is to be shown.
+  2.  I don't always see my partner's meld when it is called. Ensure that every player sees the called meld during the hand it is to be shown.
 
   The review, fix design and test cases for both items live in
   `docs/test-plan.md`.

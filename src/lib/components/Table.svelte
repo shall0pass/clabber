@@ -3,6 +3,7 @@
 	import { sortHand } from '$lib/clabber/cards';
 	import { legalMoves } from '$lib/clabber/play';
 	import { trickPointsSoFar } from '$lib/clabber/score';
+	import { SvelteSet } from 'svelte/reactivity';
 	import type { Card as CardT, Seat } from '$lib/clabber/types';
 	import type { GameStore } from '$lib/repo/gameStore.svelte';
 	import type { Presence } from '$lib/repo/presence.svelte';
@@ -14,10 +15,9 @@
 	import TrickArea from './TrickArea.svelte';
 	import BiddingPanel from './BiddingPanel.svelte';
 	import MeldPanel from './MeldPanel.svelte';
-	import Scoreboard from './Scoreboard.svelte';
+	import GameTopBar from './GameTopBar.svelte';
 	import GameOver from './GameOver.svelte';
 	import LogFeed from './LogFeed.svelte';
-	import LeaveButton from './LeaveButton.svelte';
 	import CoachPanel from './CoachPanel.svelte';
 	import Card from './Card.svelte';
 
@@ -207,7 +207,7 @@
 	// Show a shown meld's actual cards to everyone for 10s — trick two, the
 	// moment each seat's show (or forfeit) resolves.
 	let meldReveal = $state<{ seat: Seat; cards: CardT[] } | null>(null);
-	const revealedSeats = new Set<Seat>();
+	const revealedSeats = new SvelteSet<Seat>();
 	let revealHandSeed = '';
 	$effect(() => {
 		if (!doc) return;
@@ -293,15 +293,7 @@
 		class="relative flex min-h-screen flex-col items-center gap-4 bg-green-900 p-4 text-white transition-[filter] duration-1000"
 		class:lost={iLost}
 	>
-		<div class="absolute top-3 right-3 z-20">
-			<Scoreboard {store} />
-		</div>
-		<div class="absolute top-3 left-3 z-10 flex flex-col items-start gap-1">
-			<LeaveButton {onleave} />
-			{#if host.isHost}
-				<span class="text-[11px] text-white/35">running the computer players</span>
-			{/if}
-		</div>
+		<GameTopBar {store} isHost={host.isHost} {onleave} />
 
 		<div class="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
 

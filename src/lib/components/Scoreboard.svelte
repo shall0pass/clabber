@@ -70,10 +70,10 @@
 	}
 </script>
 
-<div class="flex flex-col items-end gap-1">
+<div class="relative flex min-w-0 flex-col items-end gap-1">
 	<button
 		onclick={() => (open = !open)}
-		class="rounded-xl bg-green-950/80 px-3 py-2 text-sm ring-1 ring-white/10 hover:ring-white/30"
+		class="max-w-full overflow-hidden rounded-xl bg-green-950/80 px-3 py-2 text-sm whitespace-nowrap ring-1 ring-white/10 hover:ring-white/30"
 		aria-expanded={open}
 		title="Show the full score sheet"
 	>
@@ -85,8 +85,10 @@
 	</button>
 
 	{#if open}
+		<!-- Escapes layout as a dropdown so it never widens the top bar, and is
+		     capped so its left edge always clears the "Leave table" button. -->
 		<div
-			class="w-72 max-w-[calc(100vw-1.5rem)] rounded-xl bg-green-950/95 p-3 text-sm ring-1 ring-white/15"
+			class="absolute top-full right-0 z-30 mt-1 w-72 max-w-[calc(100vw-7rem)] rounded-xl bg-green-950/95 p-3 text-sm shadow-xl ring-1 ring-white/15"
 		>
 			<div class="mb-2 flex items-baseline justify-between">
 				<span class="font-semibold">Score sheet</span>
