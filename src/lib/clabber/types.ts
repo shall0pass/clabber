@@ -161,6 +161,12 @@ export interface GameDoc {
 
 	/** `wonBySeat[seat]` is the list of 4-card tricks that seat won. */
 	wonBySeat: Card[][][];
+	/** Every collected trick this hand, oldest first, across all seats — unlike
+	 *  `wonBySeat` (grouped per seat, losing the interleaving), this is the true
+	 *  play order, for a chronological review (e.g. after a renege). `bySeat`
+	 *  is indexed by seat (not play order), so a reviewer can read one seat's
+	 *  column straight down across every trick. */
+	trickHistory: { winner: Seat; bySeat: Card[] }[];
 	/** `playedBySeat[seat]` is every card that seat has played this hand, in
 	 *  order — used for the "bella by the last K/Q" deadline. */
 	playedBySeat: Card[][];

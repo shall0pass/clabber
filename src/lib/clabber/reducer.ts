@@ -141,6 +141,7 @@ function resetToLobby(doc: GameDoc): void {
 	doc.bidding = null;
 	doc.trick = null;
 	doc.wonBySeat = [[], [], [], []];
+	doc.trickHistory = [];
 	doc.playedBySeat = [[], [], [], []];
 	doc.lastTrickWinner = null;
 	doc.melds = {
@@ -238,6 +239,7 @@ function startHand(doc: GameDoc, a: Extract<Action, { type: 'StartHand' }>): voi
 	doc.maker = null;
 	doc.trick = null;
 	doc.wonBySeat = [[], [], [], []];
+	doc.trickHistory = [];
 	doc.playedBySeat = [[], [], [], []];
 	doc.lastTrickWinner = null;
 	doc.melds = {
@@ -567,6 +569,9 @@ function advanceTrick(doc: GameDoc): void {
 
 	const winner = t.winner;
 	doc.wonBySeat[winner].push(t.plays.map((p) => p.card));
+	const bySeat: Card[] = [];
+	for (const p of t.plays) bySeat[p.seat] = p.card;
+	doc.trickHistory.push({ winner, bySeat });
 	doc.lastTrickWinner = winner;
 	const n = t.number;
 

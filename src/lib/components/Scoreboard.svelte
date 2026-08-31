@@ -1,11 +1,20 @@
 <script lang="ts">
 	import { SEATS, teamOf } from '$lib/clabber/state';
 	import { SUIT_NAME } from '$lib/cards/display';
+	import { CARD_RATIO } from '$lib/cards/sprite';
 	import Card from './Card.svelte';
 	import type { GameStore } from '$lib/repo/gameStore.svelte';
 	import type { HandResult, Seat } from '$lib/clabber/types';
 
 	let { store }: { store: GameStore } = $props();
+
+	// A trick's four cards fill the width of whatever box they're shown in
+	// (the renege breakdown), rather than using a size guessed for one screen.
+	const TRICK_CARD_GAP = 4; // px — matches `gap-1`
+	let trickRowWidth = $state(0);
+	const trickCardHeight = $derived(
+		trickRowWidth > 0 ? (trickRowWidth - TRICK_CARD_GAP * 3) / (4 * CARD_RATIO) : 80
+	);
 
 	const doc = $derived(store.doc);
 	const mySeat = $derived(store.mySeat);
@@ -125,8 +134,10 @@
 </div>
 
 {#if showModal && last}
-	<div class="fixed inset-0 z-30 grid place-items-center bg-black/50 p-4">
-		<div class="w-full max-w-sm rounded-2xl bg-green-950 p-6 text-white ring-1 ring-white/15">
+	<div class="fixed inset-0 z-30 grid place-items-center bg-black/50 p-2 sm:p-4">
+		<div
+			class="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-green-950 p-4 text-white ring-1 ring-white/15 sm:p-6"
+		>
 			<h2 class="mb-1 text-lg font-bold">{last.renege ? 'Renege!' : 'Hand scored'}</h2>
 			<p class="mb-4 text-sm text-white/60">
 				{#if last.renege}
@@ -178,25 +189,33 @@
 						Renege called by <strong class="text-amber-300">{callerName}</strong>{#if offenderName}
 							&nbsp;on <strong>{offenderName}</strong>{/if}.
 					</p>
-					{#if doc.wonBySeat.some((w) => w.length)}
+					{#if doc.trickHistory.length}
 						<p class="mt-2 mb-1 text-[10px] tracking-wide text-white/40 uppercase">
-							All tricks this hand
+							All tricks this hand, in order
 						</p>
-						<div class="flex max-h-[45vh] flex-col gap-3 overflow-y-auto">
-							{#each SEATS as seat (seat)}
-								{#each doc.wonBySeat[seat] as trick, i (`${seat}-${i}`)}
+						<div bind:clientWidth={trickRowWidth}>
+							<!-- One column per seat, so a seat's plays read straight down. -->
+							<div class="mb-1 grid grid-cols-4 gap-1">
+								{#each SEATS as seat (seat)}
+									<span class="truncate text-center text-[9px] text-white/40"
+										>{doc.players[seat]?.name ?? `seat ${seat}`}</span
+									>
+								{/each}
+							</div>
+							<div class="flex flex-col gap-2">
+								{#each doc.trickHistory as trick, i (i)}
 									<div>
-										<p class="mb-1 truncate text-[10px] text-white/50">
-											{doc.players[seat]?.name ?? `seat ${seat}`}
-										</p>
-										<div class="flex gap-1">
-											{#each trick as card (card)}
-												<Card {card} height={100} />
+										<p class="mb-0.5 text-[9px] text-white/35">Trick {i + 1}</p>
+										<div class="grid grid-cols-4 gap-1">
+											{#each trick.bySeat as card, seat (seat)}
+												<div class="flex justify-center" class:opacity-50={seat !== trick.winner}>
+													<Card {card} height={trickCardHeight} />
+												</div>
 											{/each}
 										</div>
 									</div>
 								{/each}
-							{/each}
+							</div>
 						</div>
 					{/if}
 				</div>

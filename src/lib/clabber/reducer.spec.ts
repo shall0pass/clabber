@@ -107,6 +107,22 @@ describe('a complete hand', () => {
 		expect(r.trickPoints[0] + r.trickPoints[1]).toBe(162);
 		expect(doc.hands.flat()).toHaveLength(0);
 		expect(doc.wonBySeat.flat()).toHaveLength(6); // six tricks collected
+
+		// trickHistory is the true chronological order, one entry per trick,
+		// each with every seat's card at that seat's own index.
+		expect(doc.trickHistory).toHaveLength(6);
+		for (const t of doc.trickHistory) {
+			expect(t.bySeat).toHaveLength(4);
+			expect(SEATS.every((s) => typeof t.bySeat[s] === 'string')).toBe(true);
+		}
+		// matches wonBySeat once re-grouped by winner
+		const regrouped: string[][][] = [[], [], [], []];
+		for (const t of doc.trickHistory) regrouped[t.winner].push(t.bySeat);
+		for (const s of SEATS) {
+			expect(regrouped[s].map((cards) => new Set(cards))).toEqual(
+				doc.wonBySeat[s].map((cards) => new Set(cards))
+			);
+		}
 	});
 });
 

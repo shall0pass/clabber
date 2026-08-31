@@ -30,6 +30,7 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 		bidding: null,
 		trick: null,
 		wonBySeat: [[], [], [], []],
+		trickHistory: [],
 		playedBySeat: [[], [], [], []],
 		lastTrickWinner: null,
 		melds: {
