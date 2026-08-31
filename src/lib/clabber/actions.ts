@@ -45,6 +45,12 @@ export type Action =
 	/** Collect a completed trick and move on (from phase `trickDone`). The host
 	 *  fires this after a short pause so every client sees all four cards. */
 	| { type: 'AdvanceTrick' }
+	/** Press "Continue" on the hand-scored screen. `StartHand` from
+	 *  `handScored` requires every seat to have called this first. */
+	| { type: 'AckHand'; seat: Seat }
+	/** Press "Continue" on a completed trick. `AdvanceTrick` requires every
+	 *  seat to have called this first. */
+	| { type: 'AckTrick'; seat: Seat }
 	/** Claim the "bot runner" role. Which client should claim (and when) is
 	 *  decided client-side; the reducer just records the winner. */
 	| { type: 'HostClaim'; actorId: string }

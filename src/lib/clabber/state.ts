@@ -42,9 +42,12 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 			points: [0, 0]
 		},
 		renege: null,
+		renegeCalledBy: null,
 		score: { running: [0, 0], hands: [] },
 		winner: null,
 		log: [],
-		chat: []
+		chat: [],
+		handAcks: [false, false, false, false],
+		trickAcks: [false, false, false, false]
 	};
 }

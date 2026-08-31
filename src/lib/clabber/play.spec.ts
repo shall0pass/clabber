@@ -117,6 +117,7 @@ describe('playing out a trick', () => {
 		expect(doc.trick?.winner).toBe(2);
 		expect(doc.wonBySeat[2]).toEqual([]);
 
+		for (const seat of [0, 1, 2, 3] as const) reduce(doc, { type: 'AckTrick', seat });
 		reduce(doc, { type: 'AdvanceTrick' });
 		expect(doc.wonBySeat[2]).toEqual([['AH', '9H', 'QS', 'KH']]);
 		expect(doc.lastTrickWinner).toBe(2);

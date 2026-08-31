@@ -6,7 +6,7 @@ import type { Action } from './actions';
 import type { GameDoc, Seat } from './types';
 import { chooseBid, chooseCard } from './bot';
 import { bestMeld, compareMeldClaim } from './meld';
-import { otherTeam, seatsOfTeam, teamOf } from './state';
+import { SEATS, otherTeam, seatsOfTeam, teamOf } from './state';
 
 /** How long presence silence means a host is gone. Matches the presence
  *  staleness window so a departed host is dropped consistently. */
@@ -30,7 +30,7 @@ export function nextBotAction(
 	// A competent opponent catches a renege. If the other team left an illegal
 	// card uncalled and one of its watchers is a bot, that bot calls it.
 	const r = doc.renege;
-	if (r && !r.called && ['meld', 'trick', 'trickDone'].includes(doc.phase)) {
+	if (r && !r.called && ['meld', 'trick', 'trickDone', 'handScored'].includes(doc.phase)) {
 		for (const s of seatsOfTeam(otherTeam(teamOf(r.seat)))) {
 			if (doc.players[s]?.isBot) return { type: 'CallRenege', seat: s };
 		}
@@ -66,13 +66,25 @@ export function nextBotAction(
 			}
 			return { type: 'PlayCard', seat, card: chooseCard(doc, seat) };
 		}
-		case 'trickDone':
-			// Collect the trick once everyone has had a moment to see it.
-			return { type: 'AdvanceTrick' };
+		case 'trickDone': {
+			// Every seat must press Continue before the trick clears — the host
+			// presses it for bot seats immediately, but waits on humans.
+			const unacked = SEATS.find((s) => !doc.trickAcks[s]);
+			if (unacked == null) return { type: 'AdvanceTrick' };
+			if (doc.players[unacked]?.isBot) return { type: 'AckTrick', seat: unacked };
+			return null;
+		}
 		case 'redeal':
-		case 'handScored':
-			// Keep an unattended game moving: re-deal / start the next hand.
+			// Keep an unattended game moving: re-deal.
 			return { type: 'StartHand', seed: makeSeed() };
+		case 'handScored': {
+			// Every seat must press Continue before the next hand deals — the
+			// host presses it for bot seats immediately, but waits on humans.
+			const unacked = SEATS.find((s) => !doc.handAcks[s]);
+			if (unacked == null) return { type: 'StartHand', seed: makeSeed() };
+			if (doc.players[unacked]?.isBot) return { type: 'AckHand', seat: unacked };
+			return null;
+		}
 		default:
 			return null; // lobby, gameOver
 	}

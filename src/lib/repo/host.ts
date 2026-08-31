@@ -22,10 +22,13 @@ export interface HostOptions {
 	/** Humanising think-time bounds for a bot move (ms). */
 	minDelayMs?: number;
 	maxDelayMs?: number;
-	/** How long to hold a completed trick on screen before collecting it (ms).
-	 *  A human can collect it sooner with the "Continue" button. */
+	/** Unused: a completed trick no longer clears on a timer. It waits for
+	 *  every seat to press Continue (`doc.trickAcks`) instead — kept only so
+	 *  existing option objects don't need editing. */
 	trickDelayMs?: number;
-	/** Pause on the score screen before dealing the next hand (ms). */
+	/** Unused: the score screen no longer deals on a timer. It waits for every
+	 *  seat to press Continue (`doc.handAcks`) instead — kept only so existing
+	 *  option objects don't need editing. */
 	interHandDelayMs?: number;
 	/** Pause before re-dealing after everyone passed twice (ms). */
 	redealDelayMs?: number;
@@ -174,18 +177,18 @@ export class Host {
 		const pending = nextBotAction(doc!, this.#opts.makeSeed);
 		if (!doc || !pending) return;
 
-		const { minDelayMs, maxDelayMs, trickDelayMs, interHandDelayMs, redealDelayMs } = this.#opts;
+		const { minDelayMs, maxDelayMs, redealDelayMs } = this.#opts;
 		const thinkDelay = minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
+		// Neither `trickDone` nor `handScored` gets a fixed hold any more: a
+		// trick clears, and the next hand deals, as soon as every seat has
+		// pressed Continue (bots do so at the normal think-delay) — not on a
+		// clock. See `doc.trickAcks` / `doc.handAcks`.
 		const delay =
 			pending.type === 'CallRenege'
 				? thinkDelay // catch it promptly, whatever the phase's usual hold is
-				: doc.phase === 'trickDone'
-					? trickDelayMs
-					: doc.phase === 'handScored'
-						? interHandDelayMs
-						: doc.phase === 'redeal'
-							? redealDelayMs
-							: thinkDelay;
+				: doc.phase === 'redeal'
+					? redealDelayMs
+					: thinkDelay;
 
 		this.#moveTimer = setTimeout(() => {
 			this.#moveTimer = undefined;

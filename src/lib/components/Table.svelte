@@ -19,6 +19,7 @@
 	import LogFeed from './LogFeed.svelte';
 	import LeaveButton from './LeaveButton.svelte';
 	import CoachPanel from './CoachPanel.svelte';
+	import Card from './Card.svelte';
 
 	let {
 		store,
@@ -118,7 +119,9 @@
 	const mayCallRenege = $derived(
 		mySeat != null &&
 			doc != null &&
-			['meld', 'trick', 'trickDone'].includes(doc.phase) &&
+			// Still open on the score screen — a last look before everyone
+			// presses Continue and the next hand deals.
+			['meld', 'trick', 'trickDone', 'handScored'].includes(doc.phase) &&
 			(advanced || uncalledOppRenege)
 	);
 	let pendingCall = $state(false);
@@ -161,27 +164,83 @@
 	function callBella() {
 		if (mySeat != null) store.tryChange({ type: 'CallBella', seat: mySeat });
 	}
-	function nextHand() {
-		store.tryChange({ type: 'StartHand', seed: crypto.randomUUID() });
-	}
 
 	// brief banner when the first trick resolves the meld
 	let meldBanner = $state('');
 	$effect(() => {
-		if (doc?.melds.resolved && doc.melds.scoredTeam != null) {
-			const t = doc.melds.scoredTeam;
-			const pts = doc.melds.points[t];
-			meldBanner = `${teamName(t)} scored ${pts} for meld`;
+		// `scoredTeam` only reflects who won the run/set comparison, so it stays
+		// `null` on a bella-only hand even though `points` already has bella's
+		// 20 added in — key off `points` instead so that case still announces.
+		if (doc?.melds.resolved && (doc.melds.points[0] > 0 || doc.melds.points[1] > 0)) {
+			const parts = ([0, 1] as const)
+				.filter((t) => doc.melds.points[t] > 0)
+				.map((t) => `${teamName(t)} scored ${doc.melds.points[t]} for meld`);
+			meldBanner = parts.join(' · ');
 			const id = setTimeout(() => (meldBanner = ''), 3500);
 			return () => clearTimeout(id);
+		}
+	});
+
+	// Immediate table-wide callout the moment someone declares a meld or bella
+	// (trick one) — at a real table you'd hear this said out loud right away,
+	// rather than everyone finding out only once trick two's comparison lands.
+	let announceBanner = $state('');
+	let seenLogLines = 0;
+	$effect(() => {
+		if (!doc) return;
+		if (doc.log.length <= seenLogLines) {
+			seenLogLines = doc.log.length; // hand/game reset — nothing to announce
+			return;
+		}
+		const added = doc.log.slice(seenLogLines);
+		seenLogLines = doc.log.length;
+		const hit = added.find((l) => /declares|calls bella|'s \w+ includes bella/.test(l));
+		if (hit) {
+			announceBanner = hit.replace(
+				/seat (\d)/g,
+				(_, n) => doc.players[Number(n)]?.name ?? `seat ${n}`
+			);
+			setTimeout(() => (announceBanner = ''), 3500);
+		}
+	});
+
+	// Show a shown meld's actual cards to everyone for 10s — trick two, the
+	// moment each seat's show (or forfeit) resolves.
+	let meldReveal = $state<{ seat: Seat; cards: CardT[] } | null>(null);
+	const revealedSeats = new Set<Seat>();
+	let revealHandSeed = '';
+	$effect(() => {
+		if (!doc) return;
+		if (doc.seed !== revealHandSeed) {
+			revealHandSeed = doc.seed;
+			revealedSeats.clear();
+		}
+		for (const s of SEATS) {
+			if (doc.melds.shownDone[s] && !revealedSeats.has(s)) {
+				revealedSeats.add(s);
+				const shown = doc.melds.shown[s];
+				if (shown && shown.length > 0) {
+					meldReveal = { seat: s, cards: shown.flatMap((m) => m.cards) };
+					setTimeout(() => {
+						if (meldReveal?.seat === s) meldReveal = null;
+					}, 10000);
+				}
+			}
 		}
 	});
 
 	// while a completed trick is held on screen, pulse the winner's plate
 	const flashSeat = $derived(doc?.phase === 'trickDone' ? (doc.trick?.winner ?? null) : null);
 
-	function advanceTrick() {
-		store.tryChange({ type: 'AdvanceTrick' });
+	// Every seat must press Continue before the trick clears (`doc.trickAcks`)
+	// — the host presses it for bot seats.
+	const trickAcks = $derived(doc?.trickAcks ?? [false, false, false, false]);
+	const iAckedTrick = $derived(mySeat != null && trickAcks[mySeat]);
+	const waitingOnTrick = $derived(
+		SEATS.filter((s) => !trickAcks[s]).map((s) => doc?.players[s]?.name ?? `seat ${s}`)
+	);
+	function ackTrick() {
+		if (mySeat != null) store.tryChange({ type: 'AckTrick', seat: mySeat });
 	}
 
 	// shrink cards on small screens; below `sm` the side seats stack vertically
@@ -235,7 +294,7 @@
 		class:lost={iLost}
 	>
 		<div class="absolute top-3 right-3 z-20">
-			<Scoreboard {store} onNextHand={nextHand} />
+			<Scoreboard {store} />
 		</div>
 		<div class="absolute top-3 left-3 z-10 flex flex-col items-start gap-1">
 			<LeaveButton {onleave} />
@@ -293,6 +352,30 @@
 				</div>
 			</div>
 
+			{#if announceBanner}
+				<div
+					class="rounded-lg bg-sky-300 px-4 py-1.5 text-sm font-semibold text-green-950"
+					role="status"
+				>
+					{announceBanner}
+				</div>
+			{/if}
+
+			{#if meldReveal}
+				{@const revealName = doc.players[meldReveal.seat]?.name ?? `seat ${meldReveal.seat}`}
+				<div
+					class="flex flex-col items-center gap-1.5 rounded-lg bg-amber-300 px-4 py-2 text-green-950"
+					role="status"
+				>
+					<span class="text-sm font-semibold">{revealName} shows meld</span>
+					<div class="flex gap-1">
+						{#each meldReveal.cards as card (card)}
+							<Card {card} height={px(60)} />
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			{#if meldBanner}
 				<div class="rounded-lg bg-amber-300 px-4 py-1.5 text-sm font-semibold text-green-950">
 					{meldBanner}
@@ -304,12 +387,22 @@
 			{:else if doc.phase === 'meld'}
 				<MeldPanel {store} />
 			{:else if doc.phase === 'trickDone'}
-				<button
-					onclick={advanceTrick}
-					class="rounded-lg bg-white/10 px-4 py-1.5 text-sm text-white/70 hover:bg-white/20"
-				>
-					Continue →
-				</button>
+				<div class="flex flex-col items-center gap-1">
+					{#if mySeat != null}
+						<button
+							onclick={ackTrick}
+							disabled={iAckedTrick}
+							class="rounded-lg bg-white/10 px-4 py-1.5 text-sm text-white/70 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							{iAckedTrick ? 'Waiting for the table…' : 'Continue →'}
+						</button>
+					{/if}
+					{#if waitingOnTrick.length}
+						<p class="text-[11px] text-white/35">
+							Waiting on {waitingOnTrick.join(', ')} to press Continue.
+						</p>
+					{/if}
+				</div>
 			{:else if doc.phase === 'redeal'}
 				<div class="text-sm text-white/60">Everyone passed — re-dealing…</div>
 			{/if}

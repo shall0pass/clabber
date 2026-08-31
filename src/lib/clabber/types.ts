@@ -173,6 +173,10 @@ export interface GameDoc {
 	 *  showed (`card` null). Play continues; it only costs the hand if the other
 	 *  team calls it (`called`) before the last trick is collected. */
 	renege: { seat: Seat; card: Card | null; called: boolean } | null;
+	/** Whoever pressed "Call renege" most recently (any phase), so the UI can
+	 *  point at them — separate from `renege.seat`, the accused. Reset by
+	 *  `StartHand`. */
+	renegeCalledBy: Seat | null;
 
 	score: {
 		running: [number, number];
@@ -184,4 +188,16 @@ export interface GameDoc {
 
 	/** Table chat, oldest first. Capped to the most recent messages. */
 	chat: ChatMessage[];
+
+	/** Per-seat confirmation on the hand-scored screen. `StartHand` cannot
+	 *  deal the next hand from `handScored` until every seat has acked — a
+	 *  human must press Continue; the host presses it for bot seats. Reset
+	 *  to all-`false` by `StartHand`. */
+	handAcks: boolean[];
+
+	/** Per-seat confirmation that a completed trick has been seen. `AdvanceTrick`
+	 *  cannot collect it and move on until every seat has acked — a human must
+	 *  press Continue; the host presses it for bot seats. Reset to all-`false`
+	 *  whenever a trick freshly completes (phase becomes `trickDone`). */
+	trickAcks: boolean[];
 }

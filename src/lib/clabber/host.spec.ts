@@ -90,6 +90,50 @@ describe('nextBotAction', () => {
 		expect(nextBotAction(doc)!.type).toBe('PlayCard');
 	});
 
+	describe('trickDone', () => {
+		it('acks bot seats one at a time, then advances once everyone has', () => {
+			const doc = fourBots();
+			doc.phase = 'trickDone';
+			for (const seat of SEATS) {
+				const a = nextBotAction(doc);
+				expect(a).toEqual({ type: 'AckTrick', seat });
+				reduce(doc, a!);
+			}
+			expect(nextBotAction(doc)?.type).toBe('AdvanceTrick');
+		});
+
+		it('waits (returns null) on an un-acked human seat', () => {
+			const doc = createGame('T', 0);
+			reduce(doc, { type: 'JoinSeat', seat: 0, name: 'H', actorId: 'h' });
+			for (const s of [1, 2, 3] as const) reduce(doc, { type: 'SetBot', seat: s, isBot: true });
+			doc.phase = 'trickDone';
+			for (const seat of [1, 2, 3] as const) reduce(doc, { type: 'AckTrick', seat });
+			expect(nextBotAction(doc)).toBeNull(); // only the human (seat 0) is left
+		});
+	});
+
+	describe('handScored', () => {
+		it('acks bot seats one at a time, then deals once everyone has', () => {
+			const doc = fourBots();
+			doc.phase = 'handScored';
+			for (const seat of SEATS) {
+				const a = nextBotAction(doc);
+				expect(a).toEqual({ type: 'AckHand', seat });
+				reduce(doc, a!);
+			}
+			expect(nextBotAction(doc)?.type).toBe('StartHand');
+		});
+
+		it('waits (returns null) on an un-acked human seat', () => {
+			const doc = createGame('T', 0);
+			reduce(doc, { type: 'JoinSeat', seat: 0, name: 'H', actorId: 'h' });
+			for (const s of [1, 2, 3] as const) reduce(doc, { type: 'SetBot', seat: s, isBot: true });
+			doc.phase = 'handScored';
+			for (const seat of [1, 2, 3] as const) reduce(doc, { type: 'AckHand', seat });
+			expect(nextBotAction(doc)).toBeNull(); // only the human (seat 0) is left
+		});
+	});
+
 	it('drives four bots through a whole game', () => {
 		const doc = fourBots();
 		reduce(doc, { type: 'StartHand', seed: 'whole-game' });

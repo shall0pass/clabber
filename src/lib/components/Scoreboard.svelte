@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { teamOf } from '$lib/clabber/state';
+	import { SEATS, teamOf } from '$lib/clabber/state';
 	import { SUIT_NAME } from '$lib/cards/display';
+	import Card from './Card.svelte';
 	import type { GameStore } from '$lib/repo/gameStore.svelte';
-	import type { HandResult } from '$lib/clabber/types';
+	import type { HandResult, Seat } from '$lib/clabber/types';
 
-	let { store, onNextHand }: { store: GameStore; onNextHand?: () => void } = $props();
+	let { store }: { store: GameStore } = $props();
 
 	const doc = $derived(store.doc);
 	const mySeat = $derived(store.mySeat);
@@ -27,6 +28,36 @@
 	function makerLabel(r: HandResult): string {
 		if (mySeat == null) return r.maker === 0 ? 'Team A' : 'Team B';
 		return r.maker === myTeam ? 'We' : 'They';
+	}
+
+	// Everyone must press Continue before `StartHand` will deal the next hand
+	// (see `doc.handAcks`); the host presses it for bot seats.
+	const acks = $derived(doc?.handAcks ?? [false, false, false, false]);
+	const iAcked = $derived(mySeat != null && acks[mySeat]);
+	const waitingOn = $derived(
+		(SEATS as readonly Seat[])
+			.filter((s) => !acks[s])
+			.map((s) => doc?.players[s]?.name ?? `seat ${s}`)
+	);
+	function ackHand() {
+		if (mySeat != null) store.tryChange({ type: 'AckHand', seat: mySeat });
+	}
+
+	// One more chance to call a renege while everyone reviews the breakdown —
+	// same rule as during play: freely in Advanced mode, or only a real
+	// uncalled renege from the other team outside it.
+	const advanced = $derived(doc?.advanced ?? false);
+	const uncalledOppRenege = $derived(
+		doc?.renege != null &&
+			!doc.renege.called &&
+			mySeat != null &&
+			teamOf(doc.renege.seat) !== teamOf(mySeat)
+	);
+	const mayCallRenege = $derived(mySeat != null && (advanced || uncalledOppRenege));
+	let pendingRenege = $state(false);
+	function callRenege() {
+		if (mySeat != null) store.tryChange({ type: 'CallRenege', seat: mySeat });
+		pendingRenege = false;
 	}
 </script>
 
@@ -137,15 +168,91 @@
 				</tbody>
 			</table>
 
-			{#if onNextHand}
+			{#if last.renege && doc}
+				{@const callerName = doc.players[doc.renegeCalledBy ?? 0]?.name ?? 'a player'}
+				{@const offenderName = doc.renege
+					? (doc.players[doc.renege.seat]?.name ?? 'a player')
+					: null}
+				<div class="mt-4 rounded-lg bg-red-950/60 p-3 ring-1 ring-red-400/30">
+					<p class="text-xs text-red-100">
+						Renege called by <strong class="text-amber-300">{callerName}</strong>{#if offenderName}
+							&nbsp;on <strong>{offenderName}</strong>{/if}.
+					</p>
+					{#if doc.wonBySeat.some((w) => w.length)}
+						<p class="mt-2 mb-1 text-[10px] tracking-wide text-white/40 uppercase">
+							All tricks this hand
+						</p>
+						<div class="flex max-h-[45vh] flex-col gap-3 overflow-y-auto">
+							{#each SEATS as seat (seat)}
+								{#each doc.wonBySeat[seat] as trick, i (`${seat}-${i}`)}
+									<div>
+										<p class="mb-1 truncate text-[10px] text-white/50">
+											{doc.players[seat]?.name ?? `seat ${seat}`}
+										</p>
+										<div class="flex gap-1">
+											{#each trick as card (card)}
+												<Card {card} height={100} />
+											{/each}
+										</div>
+									</div>
+								{/each}
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+
+			{#if mayCallRenege}
+				{#if !pendingRenege}
+					<button
+						onclick={() => (pendingRenege = true)}
+						class="mt-5 w-full rounded-lg bg-red-500/15 py-1.5 text-xs font-semibold text-red-200 ring-1 ring-red-400/40 hover:bg-red-500/25"
+					>
+						Call renege
+					</button>
+				{:else}
+					<div
+						class="mt-5 flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/60"
+					>
+						<p class="text-xs text-red-100">
+							{#if advanced}
+								Call a renege on the other team? If they didn't break a rule, the penalty falls on
+								your team instead.
+							{:else}
+								Call the renege on the other team? Your team takes 162 plus any meld and the hand is
+								re-scored.
+							{/if}
+						</p>
+						<div class="flex gap-2">
+							<button
+								onclick={() => (pendingRenege = false)}
+								class="rounded-lg bg-white/10 px-3 py-1 text-xs font-semibold hover:bg-white/20"
+							>
+								Cancel
+							</button>
+							<button
+								onclick={callRenege}
+								class="rounded-lg bg-red-500 px-3 py-1 text-xs font-semibold text-white hover:bg-red-400"
+							>
+								Call renege
+							</button>
+						</div>
+					</div>
+				{/if}
+			{/if}
+
+			{#if mySeat != null}
 				<button
-					onclick={onNextHand}
-					class="mt-5 w-full rounded-lg bg-green-500 py-2 font-semibold text-green-950 hover:bg-green-400"
+					onclick={ackHand}
+					disabled={iAcked}
+					class="mt-5 w-full rounded-lg bg-green-500 py-2 font-semibold text-green-950 hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-60"
 				>
-					Continue
+					{iAcked ? 'Waiting for the table…' : 'Continue'}
 				</button>
+			{/if}
+			{#if waitingOn.length}
 				<p class="mt-2 text-center text-[11px] text-white/35">
-					(the table deals the next hand automatically in a few seconds)
+					Waiting on {waitingOn.join(', ')} to press Continue.
 				</p>
 			{/if}
 		</div>

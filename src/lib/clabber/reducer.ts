@@ -66,6 +66,10 @@ export function reduce(doc: GameDoc, action: Action): void {
 			return callRenege(doc, action);
 		case 'AdvanceTrick':
 			return advanceTrick(doc);
+		case 'AckHand':
+			return ackHand(doc, action);
+		case 'AckTrick':
+			return ackTrick(doc, action);
 		case 'HostClaim':
 			doc.hostActorId = action.actorId;
 			return;
@@ -115,6 +119,14 @@ function sendChat(doc: GameDoc, a: Extract<Action, { type: 'SendChat' }>): void 
 	if (doc.chat.length > CHAT_LIMIT) doc.chat.splice(0, doc.chat.length - CHAT_LIMIT);
 }
 
+/** Press "Continue" on the hand-scored screen — required from every seat
+ *  before `StartHand` will deal the next hand. */
+function ackHand(doc: GameDoc, a: Extract<Action, { type: 'AckHand' }>): void {
+	if (doc.phase !== 'handScored')
+		fail(`can only continue from the hand-scored screen (phase ${doc.phase})`);
+	doc.handAcks[a.seat] = true;
+}
+
 function resetToLobby(doc: GameDoc): void {
 	if (doc.phase !== 'gameOver')
 		fail(`can only reset to the lobby after a game (phase ${doc.phase})`);
@@ -141,8 +153,11 @@ function resetToLobby(doc: GameDoc): void {
 		points: [0, 0]
 	};
 	doc.renege = null;
+	doc.renegeCalledBy = null;
 	doc.score = { running: [0, 0], hands: [] };
 	doc.winner = null;
+	doc.handAcks = [false, false, false, false];
+	doc.trickAcks = [false, false, false, false];
 	doc.log.push('back to the lobby for another game');
 }
 
@@ -206,6 +221,9 @@ function startHand(doc: GameDoc, a: Extract<Action, { type: 'StartHand' }>): voi
 	if (doc.phase !== 'lobby' && doc.phase !== 'handScored' && doc.phase !== 'redeal') {
 		fail(`cannot start a hand from phase ${doc.phase}`);
 	}
+	if (doc.phase === 'handScored' && !doc.handAcks.every(Boolean)) {
+		fail('everyone must press Continue before the next hand deals');
+	}
 	if (doc.players.some((p) => p == null)) fail('all four seats must be filled');
 
 	const dealer: Seat = doc.phase === 'handScored' ? nextSeat(doc.dealer) : doc.dealer;
@@ -232,6 +250,9 @@ function startHand(doc: GameDoc, a: Extract<Action, { type: 'StartHand' }>): voi
 		points: [0, 0]
 	};
 	doc.renege = null;
+	doc.renegeCalledBy = null;
+	doc.handAcks = [false, false, false, false];
+	doc.trickAcks = [false, false, false, false];
 	doc.bidding = { round: 1, turn: nextSeat(dealer), passes: [], passedSuit: null };
 	doc.phase = 'bid1';
 	doc.log.push(`seat ${dealer} deals; up-card ${upCard}`);
@@ -316,7 +337,18 @@ function announceMeld(doc: GameDoc, a: Extract<Action, { type: 'AnnounceMeld' }>
 	const chosen = a.claims ? validateClaims(a.claims, available) : available;
 	const { melds, bella } = splitBella(chosen);
 	doc.melds.declared[a.seat] = melds;
-	if (bella) doc.melds.bella = a.seat;
+	for (const m of melds) doc.log.push(`seat ${a.seat} declares ${describeMeldClaim(m)}`);
+	if (bella) {
+		doc.melds.bella = a.seat;
+		doc.log.push(`seat ${a.seat} calls bella`);
+	}
+}
+
+/** Short human-readable label for a log entry, e.g. "dad" or "fifty". Never
+ *  the suit — a call announces you hold a meld, not which one, until it's
+ *  actually shown on trick two. */
+function describeMeldClaim(c: MeldClaim): string {
+	return c.kind;
 }
 
 /** Human path: call one meld by picking its exact cards. Repeatable up to the
@@ -344,6 +376,20 @@ function declareMeld(doc: GameDoc, a: Extract<Action, { type: 'DeclareMeld' }>):
 	}
 
 	doc.melds.declared[a.seat] = [...declared.map(cloneMeld), claim];
+	doc.log.push(`seat ${a.seat} declares ${describeMeldClaim(claim)}`);
+
+	// A run through trump that includes both K and Q (e.g. "dad 'a' belle", the
+	// three-card J-Q-K of trump) scores bella too — the holder must show both
+	// bella cards to show the run at all, so no separate call is needed.
+	const trump = doc.trump;
+	if (trump && doc.melds.bella !== a.seat) {
+		const k = `K${trump}` as Card;
+		const q = `Q${trump}` as Card;
+		if (claim.cards.includes(k) && claim.cards.includes(q)) {
+			doc.melds.bella = a.seat;
+			doc.log.push(`seat ${a.seat}'s ${claim.kind} includes bella`);
+		}
+	}
 }
 
 /** Melds the opposing team has already shown so far in this trick-two round.
@@ -451,15 +497,30 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 		return;
 	}
 
-	// Fourth card played: freeze the trick on screen. `AdvanceTrick` collects it.
+	// Fourth card played: freeze the trick on screen. `AdvanceTrick` collects it
+	// once every seat has pressed Continue.
 	t.winner = trickWinner(t.plays, doc.trump);
 	doc.phase = 'trickDone';
+	doc.trickAcks = [false, false, false, false];
 	doc.log.push(`trick ${t.number} to seat ${t.winner}`);
 }
 
+/** Press "Continue" on a completed trick — required from every seat before
+ *  `AdvanceTrick` will collect it and move on. */
+function ackTrick(doc: GameDoc, a: Extract<Action, { type: 'AckTrick' }>): void {
+	if (doc.phase !== 'trickDone') fail(`no completed trick to continue from (phase ${doc.phase})`);
+	doc.trickAcks[a.seat] = true;
+}
+
 /** The window in which an uncalled renege can still be caught: any time before
- *  the last trick is collected and the hand is scored. */
-const RENEGE_CALLABLE: ReadonlySet<GameDoc['phase']> = new Set(['meld', 'trick', 'trickDone']);
+ *  the last trick is collected and the hand is scored, plus one more look on
+ *  the hand-scored breakdown itself, before everyone presses Continue. */
+const RENEGE_CALLABLE: ReadonlySet<GameDoc['phase']> = new Set([
+	'meld',
+	'trick',
+	'trickDone',
+	'handScored'
+]);
 
 function callRenege(doc: GameDoc, a: Extract<Action, { type: 'CallRenege' }>): void {
 	if (!RENEGE_CALLABLE.has(doc.phase)) fail(`too late to call the renege (phase ${doc.phase})`);
@@ -475,6 +536,19 @@ function callRenege(doc: GameDoc, a: Extract<Action, { type: 'CallRenege' }>): v
 	// the same penalty as a renege by the calling team.
 	if (!upheld && !doc.advanced) fail('there is no renege to call');
 
+	doc.renegeCalledBy = a.seat;
+
+	// Called from the score breakdown: the hand was already settled (normally,
+	// or as an earlier renege) — undo that result before re-settling it below.
+	if (doc.phase === 'handScored') {
+		const prev = doc.score.hands.pop();
+		if (prev) {
+			doc.score.running[0] -= prev.awarded[0];
+			doc.score.running[1] -= prev.awarded[1];
+		}
+		doc.winner = null;
+	}
+
 	if (upheld) {
 		r.called = true;
 		doc.log.push(`seat ${a.seat} calls the renege on seat ${r.seat} — upheld`);
@@ -487,6 +561,7 @@ function callRenege(doc: GameDoc, a: Extract<Action, { type: 'CallRenege' }>): v
 
 function advanceTrick(doc: GameDoc): void {
 	if (doc.phase !== 'trickDone') fail(`no completed trick to advance (phase ${doc.phase})`);
+	if (!doc.trickAcks.every(Boolean)) fail('everyone must press Continue before the trick clears');
 	const t = doc.trick;
 	if (!t || t.winner == null) fail('trick is not complete');
 

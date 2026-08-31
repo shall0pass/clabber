@@ -17,7 +17,8 @@ function playOneHand(doc: GameDoc): void {
 	}
 	while (doc.phase === 'meld' || doc.phase === 'trick' || doc.phase === 'trickDone') {
 		if (doc.phase === 'trickDone') {
-			reduce(doc, { type: 'AdvanceTrick' });
+			const unacked = SEATS.find((s) => !doc.trickAcks[s]);
+			reduce(doc, unacked != null ? { type: 'AckTrick', seat: unacked } : { type: 'AdvanceTrick' });
 			continue;
 		}
 		const seat = doc.trick!.turn;
@@ -106,6 +107,106 @@ describe('a complete hand', () => {
 		expect(r.trickPoints[0] + r.trickPoints[1]).toBe(162);
 		expect(doc.hands.flat()).toHaveLength(0);
 		expect(doc.wonBySeat.flat()).toHaveLength(6); // six tricks collected
+	});
+});
+
+describe('hand-scored Continue gate (handAcks)', () => {
+	/** Drive four bots to the handScored screen after exactly one hand. */
+	function atHandScored(): GameDoc {
+		let doc = fourBots();
+		for (let i = 0; i < 25; i++) {
+			doc = fourBots();
+			reduce(doc, { type: 'StartHand', seed: `ack-${i}` });
+			playOneHand(doc);
+			if (doc.phase === 'handScored') break;
+		}
+		expect(doc.phase).toBe('handScored');
+		return doc;
+	}
+
+	it('refuses to deal the next hand until every seat has pressed Continue', () => {
+		const doc = atHandScored();
+		expect(() => reduce(doc, { type: 'StartHand', seed: 'next' })).toThrow(RuleError);
+		for (const s of SEATS.slice(0, 3)) reduce(doc, { type: 'AckHand', seat: s });
+		expect(() => reduce(doc, { type: 'StartHand', seed: 'next' })).toThrow(RuleError);
+		reduce(doc, { type: 'AckHand', seat: 3 });
+		expect(() => reduce(doc, { type: 'StartHand', seed: 'next' })).not.toThrow();
+		expect(doc.phase).toBe('bid1');
+	});
+
+	it('AckHand only works from the hand-scored screen', () => {
+		const doc = fourBots();
+		reduce(doc, { type: 'StartHand', seed: 's' });
+		expect(() => reduce(doc, { type: 'AckHand', seat: 0 })).toThrow(RuleError);
+	});
+
+	it('StartHand resets handAcks for the new hand', () => {
+		const doc = atHandScored();
+		for (const s of SEATS) reduce(doc, { type: 'AckHand', seat: s });
+		reduce(doc, { type: 'StartHand', seed: 'next' });
+		expect(doc.handAcks).toEqual([false, false, false, false]);
+	});
+
+	it('a renege called from the score screen undoes the prior score and re-settles it', () => {
+		const doc = atHandScored();
+		doc.advanced = true;
+		const before = [...doc.score.running] as [number, number];
+		const priorHands = doc.score.hands.length;
+		reduce(doc, { type: 'CallRenege', seat: 0 }); // speculative — seat 0's team takes the hit
+		expect(doc.score.hands).toHaveLength(priorHands); // replaced, not appended
+		const r = doc.score.hands.at(-1)!;
+		expect(r.renege).toBe(true);
+		expect(doc.score.running).not.toEqual(before);
+		expect(doc.renegeCalledBy).toBe(0); // so the UI can point at the caller
+	});
+});
+
+describe('trick Continue gate (trickAcks)', () => {
+	function atTrickDone(): GameDoc {
+		for (let i = 0; i < 25; i++) {
+			const doc = fourBots();
+			reduce(doc, { type: 'StartHand', seed: `trick-ack-${i}` });
+			while (doc.phase === 'bid1' || doc.phase === 'bid2') {
+				const seat = doc.bidding!.turn;
+				reduce(doc, { type: 'Bid', seat, bid: chooseBid(doc, seat) });
+			}
+			if (!doc.trick) continue; // redeal — try another seed
+			while (doc.phase !== 'trickDone') {
+				const seat = doc.trick!.turn;
+				if (doc.melds.declared[seat] == null) reduce(doc, { type: 'AnnounceMeld', seat });
+				reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
+			}
+			return doc;
+		}
+		throw new Error('every seed redealt');
+	}
+
+	it('refuses to collect the trick until every seat has pressed Continue', () => {
+		const doc = atTrickDone();
+		expect(() => reduce(doc, { type: 'AdvanceTrick' })).toThrow(RuleError);
+		for (const s of SEATS.slice(0, 3)) reduce(doc, { type: 'AckTrick', seat: s });
+		expect(() => reduce(doc, { type: 'AdvanceTrick' })).toThrow(RuleError);
+		reduce(doc, { type: 'AckTrick', seat: 3 });
+		expect(() => reduce(doc, { type: 'AdvanceTrick' })).not.toThrow();
+		expect(doc.phase).toBe('trick');
+	});
+
+	it('AckTrick only works while a trick is held on screen', () => {
+		const doc = fourBots();
+		reduce(doc, { type: 'StartHand', seed: 's' });
+		expect(() => reduce(doc, { type: 'AckTrick', seat: 0 })).toThrow(RuleError);
+	});
+
+	it('starts the next trick unacked once it in turn completes', () => {
+		const doc = atTrickDone();
+		for (const s of SEATS) reduce(doc, { type: 'AckTrick', seat: s });
+		reduce(doc, { type: 'AdvanceTrick' });
+		expect(doc.phase).toBe('trick');
+		while (doc.phase !== 'trickDone') {
+			const seat = doc.trick!.turn;
+			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
+		}
+		expect(doc.trickAcks).toEqual([false, false, false, false]);
 	});
 });
 
@@ -329,13 +430,20 @@ describe('renege (Advanced mode)', () => {
 		expect(doc.score.hands[0].awarded).toEqual([162, 0]); // team 0 takes it
 	});
 
-	it('CallRenege only works in Advanced mode and only while the hand is live', () => {
+	it('CallRenege requires Advanced mode absent an uncalled renege, and closes once the game is over', () => {
 		const off = midTrick();
 		off.advanced = false;
 		expect(() => reduce(off, { type: 'CallRenege', seat: 0 })).toThrow(RuleError);
 
 		const done = midTrick();
-		reduce(done, { type: 'CallRenege', seat: 0 }); // ends the hand
+		reduce(done, { type: 'CallRenege', seat: 0 }); // ends the hand -> handScored
+		expect(done.phase).toBe('handScored');
+		// Still callable from the score breakdown — one more look before everyone
+		// presses Continue.
+		expect(() => reduce(done, { type: 'CallRenege', seat: 1 })).not.toThrow();
+
+		// Once the whole game has ended, the window is closed.
+		done.phase = 'gameOver';
 		expect(() => reduce(done, { type: 'CallRenege', seat: 1 })).toThrow(RuleError);
 	});
 });
@@ -413,6 +521,22 @@ describe('manual meld announce + show', () => {
 			expect(doc.melds.bella).toBe(2);
 		});
 
+		it('"dad \'a\' belle": a declared run through K+Q of trump scores bella with no separate call', () => {
+			const doc = atMeld();
+			doc.hands[2] = ['JS', 'QS', 'KS', '9H', 'AC', '9D']; // seat 2, trump S: dad = J-Q-K
+			reduce(doc, { type: 'DeclareMeld', seat: 2, cards: ['JS', 'QS', 'KS'] });
+			expect(doc.melds.declared[2]?.map((m) => m.kind)).toEqual(['dad']);
+			expect(doc.melds.bella).toBe(2); // auto-credited, no CallBella needed
+		});
+
+		it('never announces which suit a declared meld is in (only shown cards reveal it)', () => {
+			const doc = atMeld();
+			reduce(doc, { type: 'DeclareMeld', seat: 0, cards: ['9H', 'TH', 'JH'] });
+			const added = doc.log.join(' ');
+			expect(added).toContain('declares dad');
+			expect(added).not.toMatch(/dad [SHDC]\b/);
+		});
+
 		it('will not declare once the seat has played to trick one', () => {
 			const doc = atMeld();
 			reduce(doc, { type: 'PlayCard', seat: 1, card: doc.hands[1][0] }); // seat 1 leads
@@ -422,11 +546,17 @@ describe('manual meld announce + show', () => {
 		});
 	});
 
+	/** Every seat presses Continue on the completed trick on screen. */
+	function ackTrick(doc: GameDoc): void {
+		for (const seat of [0, 1, 2, 3] as const) reduce(doc, { type: 'AckTrick', seat });
+	}
+
 	/** Play trick one (seats 1,2,3,0), landing in `trick` number 2. */
 	function throughTrickOne(doc: GameDoc): void {
 		for (const seat of [1, 2, 3, 0] as const) {
 			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
 		}
+		ackTrick(doc);
 		reduce(doc, { type: 'AdvanceTrick' });
 		expect(doc.phase).toBe('trick');
 		expect(doc.trick?.number).toBe(2);
@@ -447,6 +577,7 @@ describe('manual meld announce + show', () => {
 			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
 		}
 		expect(doc.phase).toBe('trickDone');
+		ackTrick(doc);
 		reduce(doc, { type: 'AdvanceTrick' });
 
 		expect(doc.melds.resolved).toBe(true);
@@ -462,6 +593,7 @@ describe('manual meld announce + show', () => {
 			const seat = doc.trick!.turn;
 			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) }); // seat 0 never shows
 		}
+		ackTrick(doc);
 		reduce(doc, { type: 'AdvanceTrick' });
 		expect(doc.melds.shownDone[0]).toBe(true);
 		expect(doc.melds.shown[0]).toEqual([]);
@@ -484,6 +616,7 @@ describe('manual meld announce + show', () => {
 			if (seat === 0 || seat === 1) reduce(doc, { type: 'ShowMeld', seat });
 			reduce(doc, { type: 'PlayCard', seat, card: chooseCard(doc, seat) });
 		}
+		ackTrick(doc);
 		reduce(doc, { type: 'AdvanceTrick' });
 		// the two J-dads cancel; only bella scores, for team 0
 		expect(doc.melds.points).toEqual([20, 0]);

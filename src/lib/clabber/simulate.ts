@@ -59,11 +59,25 @@ function step(doc: GameDoc, nextSeed: () => string): void {
 			return;
 		}
 		case 'trickDone': {
+			// Every seat must press Continue before the trick clears.
+			const unacked = SEATS.find((s) => !doc.trickAcks[s]);
+			if (unacked != null) {
+				reduce(doc, { type: 'AckTrick', seat: unacked });
+				return;
+			}
 			reduce(doc, { type: 'AdvanceTrick' });
 			return;
 		}
 		case 'redeal':
+			reduce(doc, { type: 'StartHand', seed: nextSeed() });
+			return;
 		case 'handScored': {
+			// Every seat must press Continue before the next hand deals.
+			const unacked = SEATS.find((s) => !doc.handAcks[s]);
+			if (unacked != null) {
+				reduce(doc, { type: 'AckHand', seat: unacked });
+				return;
+			}
 			reduce(doc, { type: 'StartHand', seed: nextSeed() });
 			return;
 		}
