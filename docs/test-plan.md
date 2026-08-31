@@ -71,17 +71,29 @@ Fixed & absolute layers in the game view (stacking order matters):
    (`844×390`) the table + hand + bidding/meld panel stack taller than the
    viewport, pushing "Play (♦)" / "Pass" / "Call meld" / "Continue →" below the
    fold with only body scroll to recover them.
-6. **Scoreboard pill vs the top opponent's plate**: both occupy the top‑right of
+6. **The Scoreboard buries the "Leave table" button on narrow screens
+   (confirmed).** The top bar is two independent `absolute` islands —
+   `LeaveButton` at `top-3 left-3 z-10` ([Table.svelte:299](../src/lib/components/Table.svelte#L299))
+   and `Scoreboard` at `top-3 right-3 z-20` ([Table.svelte:296](../src/lib/components/Table.svelte#L296)).
+   The Scoreboard's right‑aligned expanded panel is `w-72` (288 px) capped only
+   at `calc(100vw − 1.5rem)` ([Scoreboard.svelte:89](../src/lib/components/Scoreboard.svelte#L89)).
+   At 375 px (iPhone SE) the open panel spans x ≈ 75–363 and paints **over** the
+   Leave button (x ≈ 12–86) because it has the higher `z`; at 320 px it covers
+   the entire top row. Even collapsed, a 3‑digit score ("We 240 — They 315")
+   grows the pill far enough left to overlap the button at ≤ 360 px. A hidden
+   control, not a cosmetic clip — **high priority**.
+7. **Scoreboard pill vs the top opponent's plate**: both occupy the top‑right of
    the grid on narrow screens; the pill (`z-20`) covers the partner's name /
-   turn glow (cosmetic, not a control — record but low priority).
-7. **Lobby**: seat "Sit here" buttons, the pencil rename, the copy‑code button
+   turn glow (cosmetic — record, low priority).
+8. **Lobby**: seat "Sit here" buttons, the pencil rename, the copy‑code button
    and the "Fill empty seats" / "Deal" row at 320 px.
 
 ### Viewport matrix
 
 | Label | Size | Notes |
 | ----- | ---- | ----- |
-| Small phone | 320 × 568 | hard minimum |
+| Small phone | 320 × 568 | hard minimum (iPhone SE 1st gen) |
+| iPhone SE | 375 × 667 | SE 2nd/3rd gen — the reported failure case |
 | Phone | 390 × 844 | iPhone‑class portrait |
 | Large phone | 414 × 896 | |
 | Phone landscape | 844 × 390 | worst case for vertical stacking |
@@ -104,7 +116,14 @@ and dispatch `resize`, then for every `getByRole('button')` / `getByRole('checkb
 - assert `document.elementFromPoint(cx, cy)` is the element or contained by it;
 - click it and assert the wired callback / `store.tryChange` fired.
 
-Loop the widths `[320, 360, 390, 768, 1280]`.
+Loop the widths `[320, 360, 375, 390, 768, 1280]`.
+
+**A′. Top‑bar collision (regression for item 6).** Render `LeaveButton` and
+`Scoreboard` together in the same `absolute top-3` bar markup `Table.svelte`
+uses, **open the Scoreboard**, and at widths `[320, 360, 375]` — with both a
+1‑digit and a 3‑digit running score — assert the `Leave table` button still
+passes the `boundingBox` / `elementFromPoint` / real‑click checks (i.e. the
+score panel does not overlap or cover it).
 
 **B. Cross‑layer overlap — ad‑hoc Playwright script (documented here, not part of
 `npm test`).** Drive `npm run dev` with `?fast`, one Playwright‑controlled human
@@ -121,6 +140,13 @@ Loop the widths `[320, 360, 390, 768, 1280]`.
 
 ### Fixes likely required (finalise after A/B)
 
+- **Top bar (item 6).** Replace the two `absolute` islands with one
+  `absolute inset-x-3 top-3` `flex items-start justify-between gap-2` row, the
+  Leave group `shrink-0` and in the higher stacking context. Cap the Scoreboard
+  panel at `max-w-[calc(100vw-7rem)]` so it always leaves room for the button,
+  or, below `sm`, render the score sheet as a centred sheet/modal like the
+  hand‑scored one. Either way the expanded panel gets `z-40` and must never
+  reduce the Leave button's hit box.
 - Give the "Learning mode" badge a place in normal flow (e.g. next to the
   Scoreboard) or a `z` below the action bar and clear of `MyHand`.
 - Below `sm`, auto‑collapse ChatBox / CoachPanel / LogFeed, or make them
@@ -138,6 +164,11 @@ For each viewport × phase: Join · Lobby · Bidding · Meld · Trick · Trick�
 Hand‑scored modal · Game‑over. Tap **every** control; confirm nothing is
 clipped, hidden, or under an overlay, and the pencil/robot/dealer/turn icons
 render at the right size.
+
+Explicit for item 6: on the iPhone SE (375 × 667 **and** 320 × 568), open the
+Scoreboard and confirm "Leave table" stays fully visible and tappable; repeat
+with a 3‑digit running score and with `host.isHost` true (adds the "running the
+computer players" line under the button).
 
 ---
 
