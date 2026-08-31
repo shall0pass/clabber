@@ -3,7 +3,9 @@ import {
 	classifyMeld,
 	compareMeldClaim,
 	detectMelds,
+	hasMeld,
 	resolveShownMelds,
+	seatMeldStatus,
 	selectBestMelds
 } from './meld';
 import { createGame } from './state';
@@ -212,5 +214,90 @@ describe('resolveShownMelds', () => {
 		expect(doc.melds.scoredTeam).toBe(0);
 		// dadH / dadC cancel and score nothing; the unmatched fifty still scores.
 		expect(doc.melds.points).toEqual([50, 0]);
+	});
+});
+
+describe('seatMeldStatus — what the whole table sees about a seat', () => {
+	const dad = (suit: Suit, cards: Card[]): MeldClaim => ({
+		kind: 'dad',
+		group: 'run',
+		suit,
+		cards,
+		points: 20,
+		top: 3
+	});
+
+	it('is empty, and hasMeld is false, for a seat that called nothing', () => {
+		const doc = createGame('T', 0);
+		const st = seatMeldStatus(doc, 1);
+		expect(st).toEqual({
+			declaredCount: 0,
+			bella: false,
+			shown: [],
+			forfeited: false,
+			shownPoints: null
+		});
+		expect(hasMeld(st)).toBe(false);
+	});
+
+	it('reports a called meld by count only — not its strength — before it is shown', () => {
+		const doc = createGame('T', 0);
+		doc.melds.declared[2] = [dad('H', ['9H', 'TH', 'JH'])];
+		const st = seatMeldStatus(doc, 2);
+		expect(st.declaredCount).toBe(1);
+		expect(st.shown).toEqual([]);
+		expect(st.shownPoints).toBeNull();
+		expect(hasMeld(st)).toBe(true);
+	});
+
+	it('counts multiple called melds', () => {
+		const doc = createGame('T', 0);
+		doc.melds.declared[0] = [dad('H', ['9H', 'TH', 'JH']), dad('C', ['9C', 'TC', 'JC'])];
+		expect(seatMeldStatus(doc, 0).declaredCount).toBe(2);
+	});
+
+	it('tracks bella separately from the declared list', () => {
+		const doc = createGame('T', 0);
+		doc.melds.declared[3] = [];
+		doc.melds.bella = 3;
+		const st = seatMeldStatus(doc, 3);
+		expect(st).toMatchObject({ declaredCount: 0, bella: true });
+		expect(hasMeld(st)).toBe(true);
+	});
+
+	it('exposes the shown melds and their point total once the seat has shown', () => {
+		const doc = createGame('T', 0);
+		doc.melds.declared[1] = [dad('H', ['9H', 'TH', 'JH'])];
+		doc.melds.shown[1] = [dad('H', ['9H', 'TH', 'JH'])];
+		doc.melds.shownDone[1] = true;
+		const st = seatMeldStatus(doc, 1);
+		expect(st.shown.map((m) => m.kind)).toEqual(['dad']);
+		expect(st.shownPoints).toBe(20);
+		expect(st.forfeited).toBe(false);
+	});
+
+	it('folds bella into the shown point total', () => {
+		const doc = createGame('T', 0);
+		doc.melds.declared[1] = [dad('H', ['9H', 'TH', 'JH'])];
+		doc.melds.shown[1] = [dad('H', ['9H', 'TH', 'JH'])];
+		doc.melds.shownDone[1] = true;
+		doc.melds.bella = 1;
+		expect(seatMeldStatus(doc, 1).shownPoints).toBe(40);
+	});
+
+	it('flags a forfeit: the seat took its show turn, had a meld, showed nothing', () => {
+		const doc = createGame('T', 0);
+		doc.melds.declared[2] = [dad('H', ['9H', 'TH', 'JH'])];
+		doc.melds.shownDone[2] = true; // played its trick-two card without showing
+		const st = seatMeldStatus(doc, 2);
+		expect(st.forfeited).toBe(true);
+		expect(st.shown).toEqual([]);
+		expect(hasMeld(st)).toBe(true);
+	});
+
+	it('is not a forfeit when the seat never declared a meld', () => {
+		const doc = createGame('T', 0);
+		doc.melds.shownDone[2] = true;
+		expect(seatMeldStatus(doc, 2).forfeited).toBe(false);
 	});
 });

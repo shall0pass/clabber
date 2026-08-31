@@ -2,6 +2,7 @@
 	import { SEATS, partnerSeat, teamOf } from '$lib/clabber/state';
 	import { sortHand } from '$lib/clabber/cards';
 	import { legalMoves } from '$lib/clabber/play';
+	import { seatMeldStatus } from '$lib/clabber/meld';
 	import { trickPointsSoFar } from '$lib/clabber/score';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { Card as CardT, Seat } from '$lib/clabber/types';
@@ -186,6 +187,7 @@
 	// rather than everyone finding out only once trick two's comparison lands.
 	let announceBanner = $state('');
 	let seenLogLines = 0;
+	let announceTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
 		if (!doc) return;
 		if (doc.log.length <= seenLogLines) {
@@ -194,40 +196,63 @@
 		}
 		const added = doc.log.slice(seenLogLines);
 		seenLogLines = doc.log.length;
-		const hit = added.find((l) => /declares|calls bella|'s \w+ includes bella/.test(l));
-		if (hit) {
-			announceBanner = hit.replace(
-				/seat (\d)/g,
-				(_, n) => doc.players[Number(n)]?.name ?? `seat ${n}`
-			);
-			setTimeout(() => (announceBanner = ''), 3500);
+		// Every new call in this change, not just the first — a seat can declare
+		// two melds (or a meld and bella) in one go.
+		const hits = added.filter((l) => /declares|calls bella|'s \w+ includes bella/.test(l));
+		if (hits.length) {
+			announceBanner = hits
+				.map((l) => l.replace(/seat (\d)/g, (_, n) => doc.players[Number(n)]?.name ?? `seat ${n}`))
+				.join(' · ');
+			clearTimeout(announceTimer);
+			announceTimer = setTimeout(() => (announceBanner = ''), 3500);
 		}
 	});
+	$effect(() => () => clearTimeout(announceTimer));
 
-	// Show a shown meld's actual cards to everyone for 10s — trick two, the
-	// moment each seat's show (or forfeit) resolves.
+	// Show each shown meld's actual cards to everyone during trick two. Seats
+	// show in turn order a beat apart, so this is a QUEUE, not a single slot —
+	// otherwise the next seat's show wipes the previous one off the screen
+	// before anyone can read it (you'd miss your partner's meld even though the
+	// team scored on it). Each reveal holds for `MELD_REVEAL_MS`, then the next.
+	const MELD_REVEAL_MS = 5000;
 	let meldReveal = $state<{ seat: Seat; cards: CardT[] } | null>(null);
+	let revealQueue: { seat: Seat; cards: CardT[] }[] = [];
+	let revealTimer: ReturnType<typeof setTimeout> | undefined;
 	const revealedSeats = new SvelteSet<Seat>();
 	let revealHandSeed = '';
+
+	function pumpReveals() {
+		if (meldReveal || revealQueue.length === 0) return;
+		meldReveal = revealQueue.shift() ?? null;
+		revealTimer = setTimeout(() => {
+			meldReveal = null;
+			revealTimer = undefined;
+			pumpReveals();
+		}, MELD_REVEAL_MS);
+	}
+
 	$effect(() => {
 		if (!doc) return;
 		if (doc.seed !== revealHandSeed) {
 			revealHandSeed = doc.seed;
 			revealedSeats.clear();
+			revealQueue = [];
+			clearTimeout(revealTimer);
+			revealTimer = undefined;
+			meldReveal = null;
 		}
 		for (const s of SEATS) {
 			if (doc.melds.shownDone[s] && !revealedSeats.has(s)) {
 				revealedSeats.add(s);
 				const shown = doc.melds.shown[s];
 				if (shown && shown.length > 0) {
-					meldReveal = { seat: s, cards: shown.flatMap((m) => m.cards) };
-					setTimeout(() => {
-						if (meldReveal?.seat === s) meldReveal = null;
-					}, 10000);
+					revealQueue.push({ seat: s, cards: [...shown].flatMap((m) => [...m.cards]) });
 				}
 			}
 		}
+		pumpReveals();
 	});
+	$effect(() => () => clearTimeout(revealTimer));
 
 	// while a completed trick is held on screen, pulse the winner's plate
 	const flashSeat = $derived(doc?.phase === 'trickDone' ? (doc.trick?.winner ?? null) : null);
@@ -323,6 +348,7 @@
 								online={doc.players[seat]?.isBot || presence.isOnline(doc.players[seat]?.actorId)}
 								lastBid={lastBid(seat)}
 								tricks={teamTricks(seat)}
+								meld={seatMeldStatus(doc, seat)}
 							/>
 							<CardFan
 								count={doc.hands[seat].length}
@@ -414,6 +440,7 @@
 					online={true}
 					lastBid={lastBid(mySeat)}
 					tricks={teamTricks(mySeat)}
+					meld={seatMeldStatus(doc, mySeat)}
 				/>
 				<div class="flex flex-wrap justify-center gap-2">
 					{#if canShowMeld}

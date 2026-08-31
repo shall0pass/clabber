@@ -1,5 +1,7 @@
 <script lang="ts">
-	import type { PlayerSlot, Suit } from '$lib/clabber/types';
+	import type { MeldKind, PlayerSlot, Suit } from '$lib/clabber/types';
+	import type { SeatMeldStatus } from '$lib/clabber/meld';
+	import { hasMeld } from '$lib/clabber/meld';
 	import { SUIT_SYMBOL, isRedSuit } from '$lib/cards/display';
 
 	let {
@@ -14,7 +16,8 @@
 		justWon = false,
 		online = true,
 		lastBid = '',
-		tricks = 0
+		tricks = 0,
+		meld = null
 	}: {
 		player?: PlayerSlot | null;
 		relation?: 'you' | 'partner' | 'opponent';
@@ -34,7 +37,34 @@
 		lastBid?: string;
 		/** tricks this player's team has taken this hand. */
 		tricks?: number;
+		/** this seat's meld situation, surfaced to the whole table for the hand. */
+		meld?: SeatMeldStatus | null;
 	} = $props();
+
+	// Persistent meld badge: every player sees that a seat has a meld from the
+	// moment it's called (count only — not the suit), and the actual meld once
+	// it's been shown on trick two. This is the durable backstop for the
+	// transient "shows meld" reveal, which can be missed.
+	const KIND_SHORT: Record<MeldKind, string> = {
+		dad: 'dad',
+		fifty: '50',
+		hundred: '100',
+		twohundred: '200',
+		bella: 'bella'
+	};
+	const meldChip = $derived.by(() => {
+		if (!meld || !hasMeld(meld)) return null;
+		if (meld.shown.length > 0) {
+			const kinds = meld.shown.map((c) => KIND_SHORT[c.kind]).join('+');
+			return `${kinds}${meld.bella ? '+bella' : ''} · ${meld.shownPoints}`;
+		}
+		if (meld.forfeited) return 'meld —';
+		const bits: string[] = [];
+		if (meld.declaredCount === 1) bits.push('meld');
+		else if (meld.declaredCount > 1) bits.push(`meld ×${meld.declaredCount}`);
+		if (meld.bella) bits.push('bella');
+		return bits.join(' · ');
+	});
 
 	const ringColor = $derived(
 		isTurn ? 'ring-amber-300' : relation === 'partner' ? 'ring-sky-400/60' : 'ring-white/10'
@@ -73,6 +103,15 @@
 				? 'max-w-32 max-sm:max-w-none'
 				: 'max-w-24 sm:max-w-32'}">{player?.name ?? 'empty'}</span
 		>
+
+		{#if meldChip}
+			<span
+				class="shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[10px] font-bold whitespace-nowrap text-green-950"
+				title="meld called this hand"
+			>
+				{meldChip}
+			</span>
+		{/if}
 
 		{#if isDealer}
 			<span

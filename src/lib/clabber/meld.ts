@@ -17,7 +17,7 @@
 // higher top card, then a trump sequence beats a non-trump one; still equal and
 // neither team scores meld this deal.
 
-import type { Card, GameDoc, MeldClaim, Suit, TeamId } from './types';
+import type { Card, GameDoc, MeldClaim, Seat, Suit, TeamId } from './types';
 import { RANKS, SUITS, rankOf, sequenceStrength, suitOf } from './cards';
 import { teamOf } from './state';
 
@@ -226,6 +226,44 @@ export function bestMeld(claims: MeldClaim[], trump: Suit | null): MeldClaim | n
 	const real = claims.filter((c): c is MeldClaim => c != null);
 	if (!real.length) return null;
 	return real.reduce((best, c) => (compareMeldClaim(c, best, trump) > 0 ? c : best));
+}
+
+/** A table-wide summary of one seat's meld situation this hand — what every
+ *  player is entitled to see, from the call on trick one through to the
+ *  hand-scored screen. Before a seat shows, only the *count* and bella are
+ *  public (not the suit or strength); after the show, the shown melds are. */
+export interface SeatMeldStatus {
+	/** melds this seat called on trick one (bella is tracked separately) */
+	declaredCount: number;
+	/** this seat holds bella (K + Q of trump) */
+	bella: boolean;
+	/** the melds this seat actually showed on its trick-two turn — empty until
+	 *  it shows, and stays empty on a forfeit or a beaten meld */
+	shown: MeldClaim[];
+	/** the seat took (or missed) its trick-two show but showed nothing */
+	forfeited: boolean;
+	/** points of the shown melds (incl. bella); `null` until the seat has shown */
+	shownPoints: number | null;
+}
+
+export function seatMeldStatus(doc: GameDoc, seat: Seat): SeatMeldStatus {
+	const declared = doc.melds.declared[seat] ?? [];
+	const shown = [...(doc.melds.shown[seat] ?? [])];
+	const done = doc.melds.shownDone[seat] ?? false;
+	const bella = doc.melds.bella === seat;
+	return {
+		declaredCount: declared.length,
+		bella,
+		shown,
+		forfeited: done && declared.length > 0 && shown.length === 0,
+		shownPoints:
+			shown.length > 0 ? shown.reduce((n, m) => n + m.points, 0) + (bella ? 20 : 0) : null
+	};
+}
+
+/** Whether a seat's status is worth surfacing on its plate at all. */
+export function hasMeld(s: SeatMeldStatus): boolean {
+	return s.declaredCount > 0 || s.bella || s.shown.length > 0 || s.forfeited;
 }
 
 /** Score the melds that were actually shown during trick two, writing the

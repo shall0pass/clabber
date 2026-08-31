@@ -184,6 +184,11 @@ computer players" line under the button).
 
 ## Item 2 — Every player sees a meld the moment it's called, and while it's shown
 
+> **Status: fix shipped** (persistent per‑seat badge + reveal queue + all‑match
+> announce toast + timer cleanup). Reported again from a live game — a partner's
+> meld the team scored on was never seen — which is exactly root cause 3 below.
+> Still wants the trick‑two E2E for the reveal‑queue timing.
+
 ### Expected behaviour (from the rules doc + plan §8.5)
 
 - **Trick one — a meld is _called_.** Every player is told _that_ a seat holds a
@@ -219,87 +224,75 @@ All in `src/lib/components/Table.svelte`:
 5. **`meldBanner`** (the post‑trick‑two result, `Table.svelte:168-182`) is also
    a 3.5 s transient with no lasting record.
 
-### Fix design
+### Fix design — as shipped
 
-**Primary: a persistent, per‑seat meld indicator visible to everyone.**
+**Primary: a persistent, per‑seat meld badge visible to everyone.**
 
-Add a pure selector to `src/lib/clabber/meld.ts`:
+`src/lib/clabber/meld.ts` gained a pure selector:
 
 ```ts
 export interface SeatMeldStatus {
-	declaredCount: number; // melds this seat has called this hand
+	declaredCount: number; // melds this seat called on trick one
 	bella: boolean; // melds.bella === seat
-	shown: MeldClaim[]; // populated once this seat has had its trick-two show
-	forfeited: boolean; // shownDone with a declared meld but nothing shown
-	publicPoints: number | null; // null until shown (don't leak strength/suit on the call)
+	shown: MeldClaim[]; // populated once the seat has had its trick-two show
+	forfeited: boolean; // took the show turn with a declared meld, showed nothing
+	shownPoints: number | null; // null until shown (no suit/strength leak on the call)
 }
 export function seatMeldStatus(doc: GameDoc, seat: Seat): SeatMeldStatus;
+export function hasMeld(s: SeatMeldStatus): boolean;
 ```
 
-Render it as a small chip on `PlayerPlate.svelte` (and the local player's plate):
-`bella` / `meld` / `meld ×2` before the show; `dad · 20`, `fifty · 50`, …
-after the seat's show; `meld —` struck through on forfeit. The chip is present
-from the call through `handScored`. Keep the immediate `announceBanner` for the
-"heard out loud" moment, but it is no longer the only signal.
+`PlayerPlate.svelte` takes a `meld` prop and renders a small amber chip next to
+the name: `meld` / `meld ×2` / `bella` before the show; `dad · 20`,
+`fifty+bella · 40`, … after the seat's show; `meld —` on forfeit. Present from
+the call through `handScored`, for opponents and the local player alike.
+`Table.svelte` passes `seatMeldStatus(doc, seat)` to every plate.
 
-**Secondary:**
+**Secondary (all in `Table.svelte`):**
 
-- **Reveal queue.** Replace the single `meldReveal` with a FIFO queue; show each
-  entry for a fixed `MELD_REVEAL_MS` (≈ 6000) and only then advance, so a
-  fast follow‑up show can't cut a partner's reveal short. Clear the queue on
-  `doc.seed` change and on unmount.
-- **All matches, not the first.** `added.find` → `added.filter`; surface every
-  new call (join names with `·` or enqueue each).
-- **Timer hygiene.** Both `$effect`s `return () => clearTimeout(...)`.
-- **Bella parity.** The persistent chip shows `bella` for `melds.bella === seat`
-  for every viewer (covers "all players should know if bella is called").
+- **Reveal queue.** `meldReveal` is now fed by a FIFO `revealQueue`; each entry
+  holds for `MELD_REVEAL_MS` (5000) and only then does `pumpReveals()` advance.
+  A later seat's show can no longer wipe the previous reveal off screen. Queue
+  and timer are reset on `doc.seed` change; the timer is cleared on unmount via
+  a dep‑free `$effect(() => () => clearTimeout(revealTimer))`.
+- **All matches, not the first.** `added.find` → `added.filter`; the announce
+  toast names every meld/bella called in the change, joined with `·`.
+- **Timer hygiene.** `announceBanner` and the reveal queue each have a real
+  cleanup now.
+- **Bella parity.** The chip shows `bella` for `melds.bella === seat` for every
+  viewer.
 
-No reducer/state‑shape change is required — `doc.melds.declared`,
-`doc.melds.bella`, `doc.melds.shown`, `doc.melds.shownDone` already persist for
-the whole hand and already converge across peers. This item is a
+No reducer/state‑shape change — `doc.melds.declared/bella/shown/shownDone`
+already persist for the hand and converge across peers. This is a
 **presentation** fix over existing shared state.
 
 ### Tests
 
-**Pure unit — `src/lib/clabber/meld.spec.ts` (node).** `seatMeldStatus` for:
+**Pure unit — `src/lib/clabber/meld.spec.ts` (node) — DONE (+10).**
+`seatMeldStatus` / `hasMeld` for: nothing called; one declare (count only, no
+`shownPoints`); two declares; separate bella call; bella‑only hand; after
+`ShowMeld` (`shown` + `shownPoints`); bella folded into `shownPoints`; forfeit
+(`shownDone`, declared, empty `shown`); no forfeit when nothing was declared.
 
-- nothing called → all‑zero status;
-- one `DeclareMeld` → `declaredCount 1`, `publicPoints null`, `bella false`;
-- two declares → `declaredCount 2`;
-- declare + separate bella call → `bella true`, `declaredCount` unchanged;
-- bella‑only hand → `bella true`, `declaredCount 0`;
-- "dad 'a' belle" (J‑Q‑K trump, auto‑bella at `reducer.ts:386`) → `bella true`;
-- after the seat's `ShowMeld` → `shown` populated, `publicPoints` = sum;
-- played trick‑two card without showing → `forfeited true`, `shown []`;
-- after `resolveShownMelds` → status still reflects what was shown.
+**Component — `src/lib/components/PlayerPlate.svelte.spec.ts` (new, chromium) —
+DONE (+6).** With a `meld` prop: renders `meld`, `meld ×2`, `bella`, `dad · 20`
+(after show), `meld —` (forfeit); nothing when the seat has no meld.
 
-**Reducer — `src/lib/clabber/reducer.spec.ts` (node).** Add explicit
-persistence assertions (guards against a future refactor dropping the state the
-UI now depends on): after `AnnounceMeld` / `DeclareMeld`, `doc.melds.declared[seat]`
-and `doc.melds.bella` are still readable at `bid`‑free phases `meld`, `trick`
-(1 & 2), `trickDone`, `handScored`. Keep the existing "never announces the suit"
-test (`reducer.spec.ts:548`).
+**Still open:**
 
-**Component — `src/lib/components/PlayerPlate.svelte.spec.ts` (new, chromium).**
-With a `meld` prop: renders `meld`, `meld ×2`, `bella`, `dad · 20` (after show),
-struck `meld` (forfeit); renders nothing when the seat has no meld.
-
-**Component — `src/lib/components/Table.svelte.spec.ts` (new, chromium) or an
-extension using a faked `store`/`presence`/`host`:**
-
-- partner (seat 2) has `declared[2] = [dad]`, local seat 0: seat 2's plate shows
-  a `meld` chip in phase `meld`, and it is **still present** in `trick` #1,
-  `trick` #2, `trickDone`, and `handScored`.
-- reveal queue: push two `shownDone` transitions in consecutive store snapshots
-  with fake timers → reveal #1 stays ≥ `MELD_REVEAL_MS` before reveal #2
-  appears, and both render their cards.
-- `announceBanner`: one store update that appends two `declares` log lines →
-  the banner names both melds.
-
-**E2E (ad‑hoc Playwright, documented, not in `npm test`).** One human + three
-bots, `?fast`: during trick two the human sees each revealed meld for its full
-window, and every melding seat keeps its plate chip until the hand‑scored
-screen.
+- **Reducer — `reducer.spec.ts`.** Explicit persistence assertions: after
+  `AnnounceMeld` / `DeclareMeld`, `doc.melds.declared[seat]` / `doc.melds.bella`
+  are still readable at `meld`, `trick` (1 & 2), `trickDone`, `handScored`.
+  (Existing "never announces the suit" test at `reducer.spec.ts:548` still
+  covers that half.)
+- **Component — `Table.svelte`** (faked `store`/`presence`/`host`): the partner
+  plate chip is present in `meld` and stays through `trick` #1/#2, `trickDone`,
+  `handScored`; reveal queue with fake timers shows reveal #1 for ≥
+  `MELD_REVEAL_MS` before #2; the announce toast names two melds from one
+  change.
+- **E2E (ad‑hoc Playwright).** One human + three bots, `?fast`: during trick two
+  the human sees each revealed meld for its full window, and every melding seat
+  keeps its plate chip until the hand‑scored screen.
 
 ---
 
@@ -307,9 +300,12 @@ screen.
 
 1. ~~Item 1 top bar (item 6): `GameTopBar.svelte` + `GameTopBar.svelte.spec.ts`
    (check A′).~~ **Done.**
-2. Item 2 pure selector + `meld.spec.ts` / `reducer.spec.ts` (fast, no UI).
-3. Item 2 `PlayerPlate` chip + its spec; wire into `Table.svelte`; reveal queue
-   - `Table` spec.
+2. ~~Item 2 primary + secondary: `seatMeldStatus` selector + `meld.spec.ts`;
+   `PlayerPlate` meld chip + `PlayerPlate.svelte.spec.ts`; reveal queue,
+   all‑match announce toast and timer cleanup in `Table.svelte`.~~ **Done.**
+3. Item 2 remaining: `reducer.spec.ts` persistence assertions; `Table.svelte`
+   component test (chip persistence + reveal‑queue timing + two‑meld toast);
+   trick‑two E2E.
 4. Item 1 check A (`responsive.svelte.spec.ts`) — let failures drive the
    remaining CSS/z fixes listed above.
 5. Item 1 check B + both manual checklists on the seven viewports.
@@ -318,8 +314,8 @@ screen.
 
 ## Green gate
 
-`npm run lint` · `npm run check` · `npm test` · `npm run build`. Baseline after
-the top‑bar fix: **175 tests, 21 files** (was 169; +6 from
-`GameTopBar.svelte.spec.ts`). The pre‑existing `svelte/prefer-svelte-reactivity`
-lint error on `new Set<Seat>()` in `Table.svelte` was cleared in passing
-(`SvelteSet`).
+`npm run lint` · `npm run check` · `npm test` · `npm run build`. Current
+baseline: **191 tests, 22 files** (top‑bar fix +6 `GameTopBar.svelte.spec.ts`;
+Item 2 +10 `meld.spec.ts`, +6 `PlayerPlate.svelte.spec.ts`). The pre‑existing
+`svelte/prefer-svelte-reactivity` lint error on `new Set<Seat>()` in
+`Table.svelte` was cleared in passing (`SvelteSet`).
