@@ -177,8 +177,20 @@ export interface GameDoc {
 	/** Set when a player committed a renege — an illegal card in Advanced mode
 	 *  (`card` set), or showing a meld lower than one the other team already
 	 *  showed (`card` null). Play continues; it only costs the hand if the other
-	 *  team calls it (`called`) before the last trick is collected. */
-	renege: { seat: Seat; card: Card | null; called: boolean } | null;
+	 *  team calls it (`called`) before the last trick is collected.
+	 *
+	 *  `trick` / `couldHave` describe an illegal-card renege so a bot can tell
+	 *  when it is *provable from cards on the table*: `trick` is the trick the
+	 *  bad card was played on, `couldHave` is the set the offender could legally
+	 *  have played then. Once the offender later plays one of those cards the
+	 *  renege is proven and a bot may call it. Absent on the beaten-meld path. */
+	renege: {
+		seat: Seat;
+		card: Card | null;
+		called: boolean;
+		trick?: number;
+		couldHave?: Card[];
+	} | null;
 	/** Whoever pressed "Call renege" most recently (any phase), so the UI can
 	 *  point at them — separate from `renege.seat`, the accused. Reset by
 	 *  `StartHand`. */

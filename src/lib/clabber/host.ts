@@ -27,10 +27,21 @@ export function nextBotAction(
 	doc: GameDoc,
 	makeSeed: () => string = () => crypto.randomUUID()
 ): Action | null {
-	// A competent opponent catches a renege. If the other team left an illegal
-	// card uncalled and one of its watchers is a bot, that bot calls it.
+	// A competent opponent catches a renege — but only like a real player would,
+	// once it is provable from cards already on the table. For an illegal card
+	// that means the offender has since played a card they could legally have
+	// followed with (see `renegeProvable`); for a beaten-meld show it means
+	// trick two has been played out. A human keeps the wider window the rules
+	// allow (call any time before the last trick is turned) via the UI.
 	const r = doc.renege;
-	if (r && !r.called && ['meld', 'trick', 'trickDone', 'handScored'].includes(doc.phase)) {
+	const callable =
+		r != null &&
+		!r.called &&
+		['meld', 'trick', 'trickDone', 'handScored'].includes(doc.phase) &&
+		(r.card == null
+			? doc.phase === 'trickDone' || doc.phase === 'handScored'
+			: renegeProvable(doc, r));
+	if (callable) {
 		for (const s of seatsOfTeam(otherTeam(teamOf(r.seat)))) {
 			if (doc.players[s]?.isBot) return { type: 'CallRenege', seat: s };
 		}
@@ -88,6 +99,26 @@ export function nextBotAction(
 		default:
 			return null; // lobby, gameOver
 	}
+}
+
+/** Whether an illegal-card renege is now provable from cards on the table: the
+ *  offender has, on a trick *after* the one they fouled, played a card they
+ *  could legally have followed with. Scans collected tricks and the trick in
+ *  progress. Only then may a bot call it — the same evidence a real opponent
+ *  would wait for, rather than the engine's own instant knowledge. */
+function renegeProvable(doc: GameDoc, r: NonNullable<GameDoc['renege']>): boolean {
+	if (r.card == null || r.trick == null) return false;
+	const could = r.couldHave ?? [];
+	// trickHistory is 0-indexed; trick number N sits at index N-1, so index
+	// r.trick is the first trick after the infraction.
+	for (let i = r.trick; i < doc.trickHistory.length; i++) {
+		if (could.includes(doc.trickHistory[i].bySeat[r.seat])) return true;
+	}
+	if (doc.trick && doc.trick.number > r.trick) {
+		const p = doc.trick.plays.find((play) => play.seat === r.seat);
+		if (p && could.includes(p.card)) return true;
+	}
+	return false;
 }
 
 /** Whether showing `seat`'s called meld now would rank below a meld the other

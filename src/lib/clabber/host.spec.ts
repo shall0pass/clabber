@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { nextBotAction, pickHost } from './host';
 import { reduce } from './reducer';
 import { createGame, SEATS } from './state';
-import type { GameDoc } from './types';
+import type { Card, GameDoc } from './types';
 
 function fourBots(): GameDoc {
 	const doc = createGame('T', 0);
@@ -146,5 +146,98 @@ describe('nextBotAction', () => {
 		}
 		expect([0, 1]).toContain(doc.winner);
 		expect(Math.max(...doc.score.running)).toBeGreaterThanOrEqual(500);
+	});
+
+	describe('renege', () => {
+		// Hearts led on trick 3; seat 1 (team 1) holds hearts, so a non-heart
+		// card is an illegal play. Four bots, so the watchers on team 0
+		// (seats 0 and 2) are bots that could call it.
+		function midTrickBots(): GameDoc {
+			const doc = fourBots();
+			doc.phase = 'trick';
+			doc.advanced = true;
+			doc.trump = 'S';
+			doc.maker = 0;
+			doc.hands = [
+				['AS', 'KS'],
+				['9H', 'KH', 'QC', 'AD'],
+				['TH', 'JH'],
+				['9D', 'TD']
+			];
+			doc.trick = { number: 3, leader: 0, turn: 1, plays: [{ seat: 0, card: 'AH' }], winner: null };
+			return doc;
+		}
+
+		it('does not call it while unproven — the offender has not shown they held the suit', () => {
+			const doc = midTrickBots();
+			reduce(doc, { type: 'PlayCard', seat: 1, card: 'QC', allowIllegal: true });
+			const a = nextBotAction(doc);
+			expect(a?.type).not.toBe('CallRenege');
+			expect(a).toEqual({ type: 'PlayCard', seat: 2, card: expect.any(String) });
+		});
+
+		it('calls it once the offender plays a card of the led suit in the trick in progress', () => {
+			const doc = midTrickBots();
+			reduce(doc, { type: 'PlayCard', seat: 1, card: 'QC', allowIllegal: true });
+			// Trick 3 was collected without a call; in trick 4 seat 1 plays a
+			// heart — proof it held one when it failed to follow on trick 3.
+			doc.trick = {
+				number: 4,
+				leader: 3,
+				turn: 2,
+				plays: [
+					{ seat: 3, card: '9D' },
+					{ seat: 0, card: 'KS' },
+					{ seat: 1, card: '9H' }
+				],
+				winner: null
+			};
+			expect(nextBotAction(doc)).toEqual({ type: 'CallRenege', seat: 0 });
+		});
+
+		it('calls it once the proof lands in a trick already collected, through to the score screen', () => {
+			const doc = midTrickBots();
+			reduce(doc, { type: 'PlayCard', seat: 1, card: 'QC', allowIllegal: true });
+			doc.trickHistory = [
+				{ winner: 0, bySeat: ['9S', 'TC', 'TD', 'JS'] as Card[] },
+				{ winner: 0, bySeat: ['JD', 'QD', 'AC', '9C'] as Card[] },
+				{ winner: 0, bySeat: ['AH', 'QC', 'TH', 'TD'] as Card[] }, // trick 3 — the infraction
+				{ winner: 1, bySeat: ['9D', '9H', 'JH', 'TC'] as Card[] } // trick 4 — seat 1 plays 9H
+			];
+			doc.trick = { number: 5, leader: 1, turn: 1, plays: [], winner: null };
+			expect(nextBotAction(doc)).toEqual({ type: 'CallRenege', seat: 0 });
+
+			doc.phase = 'handScored';
+			expect(nextBotAction(doc)).toEqual({ type: 'CallRenege', seat: 0 });
+		});
+
+		it('the beaten-meld path waits for trick two to be played out, not for proof', () => {
+			const doc = fourBots();
+			doc.phase = 'trick';
+			doc.trump = 'S';
+			doc.maker = 0;
+			doc.hands = [
+				['AS', 'KS'],
+				['9C', 'KC'],
+				['TH', 'JH'],
+				['9D', 'TD']
+			];
+			doc.trick = {
+				number: 2,
+				leader: 0,
+				turn: 2,
+				plays: [
+					{ seat: 0, card: '9H' },
+					{ seat: 1, card: 'TC' }
+				],
+				winner: null
+			};
+			doc.renege = { seat: 1, card: null, called: false };
+
+			expect(nextBotAction(doc)?.type).not.toBe('CallRenege');
+
+			doc.phase = 'trickDone';
+			expect(nextBotAction(doc)).toEqual({ type: 'CallRenege', seat: 0 });
+		});
 	});
 });

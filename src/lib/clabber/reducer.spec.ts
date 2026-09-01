@@ -389,7 +389,9 @@ describe('renege (Advanced mode)', () => {
 		const doc = midTrick();
 		reduce(doc, { type: 'PlayCard', seat: 1, card: 'QS', allowIllegal: true });
 
-		expect(doc.renege).toEqual({ seat: 1, card: 'QS', called: false });
+		expect(doc.renege).toMatchObject({ seat: 1, card: 'QS', called: false, trick: 3 });
+		// The hearts it could have followed with — the proof set a bot waits on.
+		expect([...(doc.renege!.couldHave ?? [])].sort()).toEqual(['9H', 'KH']);
 		expect(doc.phase).toBe('trick');
 		expect(doc.trick?.plays).toHaveLength(2);
 		expect(doc.trick?.turn).toBe(2);

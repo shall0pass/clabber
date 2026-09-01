@@ -470,7 +470,8 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 	const hand = doc.hands[a.seat];
 	if (!hand.includes(a.card)) fail(`card not in hand: ${a.card}`);
 
-	const legal = legalMoves(doc, a.seat).includes(a.card);
+	const legalNow = legalMoves(doc, a.seat);
+	const legal = legalNow.includes(a.card);
 	if (!legal && !a.allowIllegal) fail(`illegal card: ${a.card}`);
 
 	// Trick two: playing without having shown forfeits any meld the seat called.
@@ -489,8 +490,16 @@ function playCard(doc: GameDoc, a: Extract<Action, { type: 'PlayCard' }>): void 
 		// costs the hand if the other team calls the renege (see `callRenege`)
 		// before the last trick is collected. Record the first offence only.
 		if (!doc.renege) {
-			doc.renege = { seat: a.seat, card: a.card, called: false };
-			doc.log.push(`seat ${a.seat} played an illegal card (${a.card}); renege may be called`);
+			doc.renege = {
+				seat: a.seat,
+				card: a.card,
+				called: false,
+				trick: t.number,
+				couldHave: [...legalNow]
+			};
+			doc.log.push(
+				`seat ${a.seat} played an illegal card (${a.card}); renege may be called once proven`
+			);
 		}
 	}
 
