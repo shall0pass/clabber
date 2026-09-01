@@ -79,24 +79,18 @@
 	);
 </script>
 
-<div class={vertical ? 'grid place-items-center max-sm:w-8' : 'contents'}>
+<div class={vertical ? 'grid place-items-center max-sm:w-12' : 'contents'}>
 	<div
-		class="flex max-w-full min-w-0 bg-green-950/80 text-sm ring-2 {ringColor} {rotClass}
-			{vertical
-			? 'items-center gap-1.5 rounded-full px-2 py-1.5 sm:gap-2 sm:px-3'
-			: 'flex-col items-center gap-1 rounded-2xl px-3 py-1.5'}
-			{vertical ? 'max-sm:max-w-none' : ''}
+		class="flex max-w-full min-w-0 flex-col items-center gap-1 rounded-2xl bg-green-950/80 px-3 py-1.5 text-sm ring-2 {ringColor} {rotClass}
+			{vertical ? 'max-sm:max-w-none max-sm:px-2 max-sm:py-1' : ''}
 			{isTurn ? 'shadow-[0_0_16px_rgba(252,211,77,0.5)]' : ''}"
 		class:won={justWon}
 	>
-		<!-- DEAL / MADE / meld chips: their own row above the name on the round
-		     table plates, inline for the rotated side-seat plates. -->
+		<!-- DEAL / MADE / meld chips get their own row above the name. -->
 		<div
-			class={vertical
-				? 'contents'
-				: isDealer || isMaker || meldChip
-					? 'flex flex-wrap items-center justify-center gap-1'
-					: 'hidden'}
+			class={isDealer || isMaker || meldChip
+				? 'flex flex-wrap items-center justify-center gap-1'
+				: 'hidden'}
 		>
 			{#if isDealer}
 				<span
@@ -144,7 +138,7 @@
 
 			<span
 				class="truncate font-semibold {vertical
-					? 'max-w-32 max-sm:max-w-none'
+					? 'max-w-32 max-sm:max-w-36'
 					: 'max-w-32 sm:max-w-44'}">{player?.name ?? 'empty'}</span
 			>
 
