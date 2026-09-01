@@ -352,9 +352,14 @@
 						<!-- My own plate is rendered just above my hand instead, so a card
 						     I play into the centre never lands on my name. On a narrow
 						     screen the left/right plates sit sideways, outboard of the
-						     cards, so long names have room to run vertically. -->
+						     cards, so long names have room to run vertically.
+						     The top (partner) plate sits in the fixed-width centre column;
+						     let it spill past that column into the empty felt beside it
+						     (capped at the viewport) rather than clamp to the column and
+						     collapse the name once DEAL / MADE / meld chips are on it. -->
 						<div
-							class="{areaFor(seat)} flex max-w-full min-w-0 items-center gap-0.5 sm:gap-1.5
+							class="{areaFor(seat)} flex min-w-0 items-center gap-0.5 sm:gap-1.5
+								{slot === 2 ? 'max-w-[92vw]' : 'max-w-full'}
 								{slot === 1 ? 'flex-row sm:flex-col' : slot === 3 ? 'flex-row-reverse sm:flex-col' : 'flex-col'}"
 						>
 							<PlayerPlate
