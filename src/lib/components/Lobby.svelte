@@ -37,6 +37,9 @@
 	// follow-suit and turns on the coach panel.
 	const learning = $derived(doc?.training ?? false);
 
+	const DIFFICULTIES = ['easy', 'normal', 'expert'] as const;
+	const difficulty = $derived(doc?.difficulty ?? 'expert');
+
 	// slot 0 bottom, 1 left, 2 top, 3 right — rotated so my seat is at the bottom.
 	const slotClass = ['area-bottom', 'area-left', 'area-top', 'area-right'];
 	function slotFor(seat: SeatIndex) {
@@ -80,6 +83,9 @@
 		const on = !learning;
 		store.change({ type: 'SetTraining', on });
 		store.change({ type: 'SetAdvanced', on: !on });
+	}
+	function chooseDifficulty(level: (typeof DIFFICULTIES)[number]) {
+		store.change({ type: 'SetDifficulty', level });
 	}
 
 	let copied = $state(false);
@@ -164,6 +170,32 @@
 		>
 			Deal
 		</button>
+	</div>
+
+	<div
+		class="flex max-w-sm flex-col gap-2 rounded-lg bg-white/5 px-4 py-3 text-sm ring-1 ring-white/10"
+	>
+		<div class="flex items-center justify-between gap-3">
+			<span class="font-semibold">Computer skill</span>
+			<div class="flex overflow-hidden rounded-md ring-1 ring-white/15">
+				{#each DIFFICULTIES as level (level)}
+					<button
+						type="button"
+						onclick={() => chooseDifficulty(level)}
+						class="px-3 py-1 text-xs font-semibold capitalize transition-colors {difficulty ===
+						level
+							? 'bg-amber-400 text-green-950'
+							: 'text-white/70 hover:bg-white/10'}"
+					>
+						{level}
+					</button>
+				{/each}
+			</div>
+		</div>
+		<span class="text-white/50">
+			How sharp the computer players are. Expert never makes a mistake; Normal slips occasionally;
+			Easy plays like a beginner. You can change this any time.
+		</span>
 	</div>
 
 	<label

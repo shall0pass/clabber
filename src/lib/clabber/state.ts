@@ -20,6 +20,7 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 		phase: 'lobby',
 		advanced: true,
 		training: false,
+		difficulty: 'expert',
 		dealer: 0,
 		makerSeat: null,
 		seed: '',

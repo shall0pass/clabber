@@ -338,6 +338,24 @@ describe('SetTraining', () => {
 	});
 });
 
+describe('SetDifficulty', () => {
+	it('defaults to expert and can be changed', () => {
+		const doc = createGame('T', 0);
+		expect(doc.difficulty).toBe('expert');
+		reduce(doc, { type: 'SetDifficulty', level: 'easy' });
+		expect(doc.difficulty).toBe('easy');
+		reduce(doc, { type: 'SetDifficulty', level: 'normal' });
+		expect(doc.difficulty).toBe('normal');
+	});
+
+	it('can be changed mid-game (it only tunes bot behaviour)', () => {
+		const doc = fourBots();
+		reduce(doc, { type: 'StartHand', seed: 'diff' });
+		expect(() => reduce(doc, { type: 'SetDifficulty', level: 'easy' })).not.toThrow();
+		expect(doc.difficulty).toBe('easy');
+	});
+});
+
 describe('renege (Advanced mode)', () => {
 	// Hearts led; seat 1 holds hearts, so QS / AD are illegal for it.
 	function midTrick(): GameDoc {

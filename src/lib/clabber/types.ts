@@ -14,6 +14,10 @@ export type TeamId = 0 | 1;
  *  a suit (round 2 only). */
 export type Bid = 'pass' | 'accept' | { suit: Suit };
 
+/** Computer-player skill, chosen game-wide in the lobby. `expert` is flawless;
+ *  the others apply a probability to each bot judgment call. */
+export type Difficulty = 'easy' | 'normal' | 'expert';
+
 export type Phase =
 	| 'lobby'
 	| 'bid1' // round 1 — play or pass the up-card suit
@@ -143,6 +147,10 @@ export interface GameDoc {
 	 *  table explaining the rules for whatever is on the table right now. Paired
 	 *  with `advanced`: exactly one of the two is on. */
 	training: boolean;
+	/** Computer-player skill, chosen in the lobby, game-wide. `expert` (the
+	 *  default) is flawless; `normal` / `easy` apply a probability to whether a
+	 *  bot plays the best card, handles its meld, and catches a renege. */
+	difficulty: Difficulty;
 	dealer: Seat;
 	/** The seat that named trump this hand (for "made by …" on the table), or
 	 *  `null` before a trump is set. */

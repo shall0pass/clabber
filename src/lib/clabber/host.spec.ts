@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { nextBotAction, pickHost } from './host';
 import { reduce } from './reducer';
 import { createGame, SEATS } from './state';
-import type { Card, GameDoc } from './types';
+import { chooseCard } from './bot';
+import { legalMoves } from './play';
+import type { Card, Difficulty, GameDoc } from './types';
 
 function fourBots(): GameDoc {
 	const doc = createGame('T', 0);
@@ -238,6 +240,152 @@ describe('nextBotAction', () => {
 
 			doc.phase = 'trickDone';
 			expect(nextBotAction(doc)).toEqual({ type: 'CallRenege', seat: 0 });
+		});
+	});
+
+	describe('difficulty', () => {
+		// Diamonds led by seat 3; seat 0 (a bot) is on lead-to-follow with three
+		// legal diamonds, so `chooseCard` has a real choice to perturb.
+		function cardDoc(difficulty: Difficulty): GameDoc {
+			const doc = fourBots();
+			doc.phase = 'trick';
+			doc.difficulty = difficulty;
+			doc.trump = 'S';
+			doc.maker = 0;
+			doc.hands = [['9D', 'TD', 'AD'], ['9C'], ['9H'], ['KH']];
+			doc.trick = { number: 3, leader: 3, turn: 0, plays: [{ seat: 3, card: 'KD' }], winner: null };
+			return doc;
+		}
+
+		// Seat 0 to open trick one; `declared[0]` is null, so the meld decision runs.
+		function meldDoc(difficulty: Difficulty): GameDoc {
+			const doc = fourBots();
+			doc.phase = 'meld';
+			doc.difficulty = difficulty;
+			doc.trump = 'S';
+			doc.maker = 0;
+			doc.hands = [['9H', 'TH', 'JH', 'QS', 'KS', 'AS'], [], [], []];
+			doc.trick = { number: 1, leader: 0, turn: 0, plays: [], winner: null };
+			return doc;
+		}
+
+		// Seat 1 fouled on trick 3 (played QC on a heart lead) and then played a
+		// heart on trick 4 — the renege is provable; watchers are bot seats 0 & 2.
+		function provenRenegeDoc(difficulty: Difficulty): GameDoc {
+			const doc = fourBots();
+			doc.phase = 'trick';
+			doc.difficulty = difficulty;
+			doc.advanced = true;
+			doc.trump = 'S';
+			doc.maker = 0;
+			doc.hands = [
+				['AS', 'KS'],
+				['9H', 'KH', 'QC', 'AD'],
+				['TH', 'JH'],
+				['9D', 'TD']
+			];
+			doc.trick = { number: 3, leader: 0, turn: 1, plays: [{ seat: 0, card: 'AH' }], winner: null };
+			reduce(doc, { type: 'PlayCard', seat: 1, card: 'QC', allowIllegal: true });
+			doc.trick = {
+				number: 4,
+				leader: 3,
+				turn: 2,
+				plays: [
+					{ seat: 3, card: '9D' },
+					{ seat: 0, card: 'KS' },
+					{ seat: 1, card: '9H' }
+				],
+				winner: null
+			};
+			return doc;
+		}
+
+		it('expert plays chooseCard’s pick every time, with no rolls', () => {
+			for (let i = 0; i < 40; i++) {
+				const doc = cardDoc('expert');
+				doc.seed = `e${i}`;
+				expect(nextBotAction(doc)).toEqual({
+					type: 'PlayCard',
+					seat: 0,
+					card: chooseCard(doc, 0)
+				});
+			}
+		});
+
+		it('is deterministic — the same doc yields the same action on every call', () => {
+			const doc = cardDoc('easy');
+			doc.seed = 'stable';
+			expect(nextBotAction(doc)).toEqual(nextBotAction(doc));
+
+			const rd = provenRenegeDoc('easy');
+			rd.seed = 'stable';
+			expect(nextBotAction(rd)).toEqual(nextBotAction(rd));
+		});
+
+		it('easy card play stays legal but is not always the best card', () => {
+			const best = chooseCard(cardDoc('easy'), 0);
+			const legal = legalMoves(cardDoc('easy'), 0);
+			let slips = 0;
+			for (let i = 0; i < 200; i++) {
+				const doc = cardDoc('easy');
+				doc.seed = `l${i}`;
+				const card = (nextBotAction(doc) as { card: Card }).card;
+				expect(legal).toContain(card);
+				if (card !== best) slips++;
+			}
+			expect(slips).toBeGreaterThan(0);
+			expect(slips).toBeLessThan(200);
+		});
+
+		it('normal keeps the best card ~92% of the time', () => {
+			const best = chooseCard(cardDoc('normal'), 0);
+			let right = 0;
+			const N = 400;
+			for (let i = 0; i < N; i++) {
+				const doc = cardDoc('normal');
+				doc.seed = `n${i}`;
+				if ((nextBotAction(doc) as { card?: Card }).card === best) right++;
+			}
+			expect(right / N).toBeGreaterThan(0.85);
+			expect(right / N).toBeLessThan(0.985);
+		});
+
+		it('expert always announces its meld; easy sometimes skips it and just plays', () => {
+			for (let i = 0; i < 30; i++) {
+				const doc = meldDoc('expert');
+				doc.seed = `x${i}`;
+				expect(nextBotAction(doc)!.type).toBe('AnnounceMeld');
+			}
+
+			let announced = 0;
+			let skipped = 0;
+			for (let i = 0; i < 200; i++) {
+				const doc = meldDoc('easy');
+				doc.seed = `m${i}`;
+				const a = nextBotAction(doc)!;
+				if (a.type === 'AnnounceMeld') announced++;
+				else if (a.type === 'PlayCard') skipped++;
+			}
+			expect(announced).toBeGreaterThan(0);
+			expect(skipped).toBeGreaterThan(0);
+			expect(announced).toBeGreaterThan(skipped); // ~80% still announce
+		});
+
+		it('expert always catches a provable renege; easy often misses it', () => {
+			let caught = 0;
+			let missed = 0;
+			for (let i = 0; i < 200; i++) {
+				const exp = provenRenegeDoc('expert');
+				exp.seed = `r${i}`;
+				expect(nextBotAction(exp)).toEqual({ type: 'CallRenege', seat: 0 });
+
+				const easy = provenRenegeDoc('easy');
+				easy.seed = `r${i}`;
+				if (nextBotAction(easy)!.type === 'CallRenege') caught++;
+				else missed++;
+			}
+			expect(caught).toBeGreaterThan(0);
+			expect(missed).toBeGreaterThan(0);
 		});
 	});
 });

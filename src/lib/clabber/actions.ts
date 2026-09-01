@@ -1,6 +1,6 @@
 // Every mutation to a `GameDoc` goes through `reduce` as one of these actions.
 
-import type { Bid, Card, MeldClaim, Seat } from './types';
+import type { Bid, Card, Difficulty, MeldClaim, Seat } from './types';
 
 export type Action =
 	| { type: 'JoinSeat'; seat: Seat; name: string; actorId?: string }
@@ -13,6 +13,9 @@ export type Action =
 	/** Turn the training coach on or off. It only changes what help the UI
 	 *  offers, so it is allowed in any phase. */
 	| { type: 'SetTraining'; on: boolean }
+	/** Set the computer-player skill, game-wide. Only tunes bot behaviour, so it
+	 *  is allowed in any phase. */
+	| { type: 'SetDifficulty'; level: Difficulty }
 	/** Deal the next hand. From `handScored` the deal advances to the next
 	 *  dealer; from `redeal` (or the first hand) it keeps the current dealer. */
 	| { type: 'StartHand'; seed: string }
