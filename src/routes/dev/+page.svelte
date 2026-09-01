@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { dev } from '$app/environment';
 	import Card from '$lib/components/Card.svelte';
+	import Fireworks from '$lib/components/Fireworks.svelte';
 	import type { Card as CardT, Rank, Suit } from '$lib/clabber/types';
 
 	const SUITS: { id: Suit; name: string }[] = [
@@ -12,6 +13,9 @@
 	const RANKS: Rank[] = ['A', 'K', 'Q', 'J', 'T', '9'];
 
 	let height = $state(120);
+
+	// re-mounting Fireworks (bump the key) replays the volley from the start
+	let fireworksRun = $state(0);
 </script>
 
 {#if dev}
@@ -47,6 +51,17 @@
 					<figcaption>face-down</figcaption>
 				</figure>
 			</div>
+		</section>
+
+		<section>
+			<h2>Fireworks</h2>
+			<p>The winners' celebration overlay, on demand:</p>
+			<button type="button" onclick={() => fireworksRun++}> Play fireworks 🎆 </button>
+			{#if fireworksRun > 0}
+				{#key fireworksRun}
+					<Fireworks />
+				{/key}
+			{/if}
 		</section>
 	</main>
 {:else}
@@ -93,5 +108,18 @@
 		align-items: center;
 		gap: 0.5rem;
 		font-size: 0.85rem;
+	}
+	button {
+		font: inherit;
+		cursor: pointer;
+		border: 0;
+		border-radius: 0.5rem;
+		background: #ffd54a;
+		color: #0a5c36;
+		padding: 0.5rem 1rem;
+		font-weight: 600;
+	}
+	button:hover {
+		background: #ffe27a;
 	}
 </style>

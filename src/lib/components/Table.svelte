@@ -428,7 +428,7 @@
 							<span class="text-sm font-semibold">{revealName} shows meld</span>
 							<div class="flex gap-1">
 								{#each meldReveal.cards as card (card)}
-									<Card {card} height={px(60)} />
+									<Card {card} height={px(92)} />
 								{/each}
 							</div>
 						</div>
