@@ -471,7 +471,11 @@
 					{:else if doc.phase === 'meld'}
 						<div class="pointer-events-auto"><MeldPanel {store} /></div>
 					{:else if doc.phase === 'trickDone'}
-						<div class="pointer-events-auto flex flex-col items-center gap-1">
+						<!-- flex-col-reverse: the button is pinned to the bottom of the
+						     slot, so the "waiting on …" line wraps upward over the felt
+						     (using the full width available) instead of pushing the
+						     button down into the hand. -->
+						<div class="pointer-events-auto flex flex-col-reverse items-center gap-1">
 							{#if mySeat != null}
 								<button
 									onclick={ackTrick}
@@ -482,7 +486,7 @@
 								</button>
 							{/if}
 							{#if waitingOnTrick.length}
-								<p class="text-[11px] text-white/35">
+								<p class="w-[min(92vw,40rem)] text-center text-[11px] text-white/35">
 									Waiting on {waitingOnTrick.join(', ')} to press Continue.
 								</p>
 							{/if}
