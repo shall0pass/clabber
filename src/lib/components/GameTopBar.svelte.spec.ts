@@ -47,7 +47,7 @@ describe('GameTopBar.svelte — the score sheet never buries "Leave table"', () 
 			it(`${w}px / score ${us}-${them}: Leave stays visible and clickable with the sheet open`, async () => {
 				await page.viewport(w, h);
 				const onleave = vi.fn();
-				render(GameTopBar, { store: fakeStore([us, them]), isHost: true, onleave });
+				render(GameTopBar, { store: fakeStore([us, them]), onleave });
 
 				await page.getByRole('button', { name: /to 500/ }).click();
 				const panelEl = page.getByText('Score sheet').element().closest('div') as HTMLElement;

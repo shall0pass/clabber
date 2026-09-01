@@ -9,7 +9,6 @@ import { createGame, SEATS } from '$lib/clabber/state';
 import type { GameDoc } from '$lib/clabber/types';
 import type { GameStore } from '$lib/repo/gameStore.svelte';
 import type { Presence } from '$lib/repo/presence.svelte';
-import type { Host } from '$lib/repo/host';
 
 // docs/table-jitter-plan.md — the phase panel, the three banners and the renege
 // prompt are now absolutely positioned in a fixed-height slot, so none of them
@@ -54,8 +53,7 @@ const trickDoc = () => {
 const fakeStore = (doc: GameDoc) =>
 	({ doc, mySeat: 0, tryChange: () => true }) as unknown as GameStore;
 const presence = { isOnline: () => true } as unknown as Presence;
-const host = { isHost: false } as unknown as Host;
-const props = (doc: GameDoc) => ({ store: fakeStore(doc), presence, host, onleave: () => {} });
+const props = (doc: GameDoc) => ({ store: fakeStore(doc), presence, onleave: () => {} });
 
 const settle = () => new Promise((r) => setTimeout(r, 60));
 const gridRect = () =>

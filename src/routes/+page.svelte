@@ -120,7 +120,7 @@
 	{#if phase === 'lobby'}
 		<Lobby {store} {presence} onleave={leave} />
 	{:else}
-		<Table {store} {presence} {host} onleave={leave} />
+		<Table {store} {presence} onleave={leave} />
 	{/if}
 	<ChatBox {store} />
 {:else}

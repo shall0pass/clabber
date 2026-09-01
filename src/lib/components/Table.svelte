@@ -8,7 +8,6 @@
 	import type { Card as CardT, Seat } from '$lib/clabber/types';
 	import type { GameStore } from '$lib/repo/gameStore.svelte';
 	import type { Presence } from '$lib/repo/presence.svelte';
-	import type { Host } from '$lib/repo/host';
 
 	import PlayerPlate from './PlayerPlate.svelte';
 	import CardFan from './CardFan.svelte';
@@ -22,12 +21,8 @@
 	import CoachPanel from './CoachPanel.svelte';
 	import Card from './Card.svelte';
 
-	let {
-		store,
-		presence,
-		host,
-		onleave
-	}: { store: GameStore; presence: Presence; host: Host; onleave: () => void } = $props();
+	let { store, presence, onleave }: { store: GameStore; presence: Presence; onleave: () => void } =
+		$props();
 
 	const doc = $derived(store.doc);
 	const mySeat = $derived(store.mySeat);
@@ -342,7 +337,7 @@
 		class="relative flex min-h-screen flex-col items-center gap-4 bg-green-900 p-4 text-white transition-[filter] duration-1000"
 		class:lost={iLost}
 	>
-		<GameTopBar {store} isHost={host.isHost} {onleave} />
+		<GameTopBar {store} {onleave} />
 
 		<div class="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
 
