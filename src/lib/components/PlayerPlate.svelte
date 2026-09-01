@@ -81,73 +81,90 @@
 
 <div class={vertical ? 'grid place-items-center max-sm:w-8' : 'contents'}>
 	<div
-		class="flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-green-950/80 px-2 py-1.5 text-sm ring-2 sm:gap-2 sm:px-3 {ringColor} {rotClass}
+		class="flex max-w-full min-w-0 bg-green-950/80 text-sm ring-2 {ringColor} {rotClass}
+			{vertical
+			? 'items-center gap-1.5 rounded-full px-2 py-1.5 sm:gap-2 sm:px-3'
+			: 'flex-col items-center gap-1 rounded-2xl px-3 py-1.5'}
 			{vertical ? 'max-sm:max-w-none' : ''}
 			{isTurn ? 'shadow-[0_0_16px_rgba(252,211,77,0.5)]' : ''}"
 		class:won={justWon}
 	>
-		<span
-			class="inline-block h-2 w-2 shrink-0 rounded-full {online ? 'bg-green-400' : 'bg-white/25'}"
-		></span>
-
-		{#if player?.isBot}
-			<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 text-white/60" fill="currentColor">
-				<path
-					d="M12 2a1 1 0 0 1 1 1v1h3a3 3 0 0 1 3 3v2h1a1 1 0 1 1 0 2h-1v4a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-4H4a1 1 0 1 1 0-2h1V7a3 3 0 0 1 3-3h3V3a1 1 0 0 1 1-1Zm-2 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm4 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"
-				/>
-			</svg>
-		{/if}
-
-		<span
-			class="truncate font-semibold {vertical
-				? 'max-w-32 max-sm:max-w-none'
-				: 'max-w-24 sm:max-w-32'}">{player?.name ?? 'empty'}</span
+		<!-- DEAL / MADE / meld chips: their own row above the name on the round
+		     table plates, inline for the rotated side-seat plates. -->
+		<div
+			class={vertical
+				? 'contents'
+				: isDealer || isMaker || meldChip
+					? 'flex flex-wrap items-center justify-center gap-1'
+					: 'hidden'}
 		>
+			{#if isDealer}
+				<span
+					class="shrink-0 rounded-full bg-amber-400 px-1.5 text-[10px] font-extrabold tracking-wide text-green-950"
+					title="dealer">DEAL</span
+				>
+			{/if}
 
-		{#if meldChip}
-			<span
-				class="shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[10px] font-bold whitespace-nowrap text-green-950"
-				title="meld called this hand"
-			>
-				{meldChip}
-			</span>
-		{/if}
+			{#if isMaker}
+				<span
+					class="flex shrink-0 items-center gap-0.5 rounded-full bg-white px-1.5 text-[10px] font-extrabold tracking-wide text-green-950"
+					title="named trump"
+				>
+					MADE
+					{#if trump}
+						<span class={isRedSuit(trump) ? 'text-red-600' : 'text-black'}
+							>{SUIT_SYMBOL[trump]}</span
+						>
+					{/if}
+				</span>
+			{/if}
 
-		{#if isDealer}
-			<span
-				class="shrink-0 rounded-full bg-amber-400 px-1.5 text-[10px] font-extrabold tracking-wide text-green-950"
-				title="dealer">DEAL</span
-			>
-		{/if}
+			{#if meldChip}
+				<span
+					class="shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[10px] font-bold whitespace-nowrap text-green-950"
+					title="meld called this hand"
+				>
+					{meldChip}
+				</span>
+			{/if}
+		</div>
 
-		{#if isMaker}
+		<div class="flex max-w-full min-w-0 items-center gap-1.5">
 			<span
-				class="flex shrink-0 items-center gap-0.5 rounded-full bg-white px-1.5 text-[10px] font-extrabold tracking-wide text-green-950"
-				title="named trump"
-			>
-				MADE
-				{#if trump}
-					<span class={isRedSuit(trump) ? 'text-red-600' : 'text-black'}>{SUIT_SYMBOL[trump]}</span>
-				{/if}
-			</span>
-		{/if}
-
-		{#if isThinking}
-			<!-- a fixed 8px dot, not the word "thinking…", so the plate doesn't
-			     grow and shrink every second as the turn walks the table -->
-			<span
-				class="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-300 motion-safe:animate-pulse"
-				title="thinking"
+				class="inline-block h-2 w-2 shrink-0 rounded-full {online ? 'bg-green-400' : 'bg-white/25'}"
 			></span>
-		{:else if lastBid}
-			<span class="text-xs text-white/70">{lastBid}</span>
-		{/if}
 
-		{#if tricks > 0}
-			<span class="ml-auto text-[11px] whitespace-nowrap text-white/45"
-				>{tricks} {tricks === 1 ? 'trick' : 'tricks'}</span
+			{#if player?.isBot}
+				<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 text-white/60" fill="currentColor">
+					<path
+						d="M12 2a1 1 0 0 1 1 1v1h3a3 3 0 0 1 3 3v2h1a1 1 0 1 1 0 2h-1v4a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-4H4a1 1 0 1 1 0-2h1V7a3 3 0 0 1 3-3h3V3a1 1 0 0 1 1-1Zm-2 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm4 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"
+					/>
+				</svg>
+			{/if}
+
+			<span
+				class="truncate font-semibold {vertical
+					? 'max-w-32 max-sm:max-w-none'
+					: 'max-w-32 sm:max-w-44'}">{player?.name ?? 'empty'}</span
 			>
-		{/if}
+
+			{#if isThinking}
+				<!-- a fixed 8px dot, not the word "thinking…", so the plate doesn't
+				     grow and shrink every second as the turn walks the table -->
+				<span
+					class="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-300 motion-safe:animate-pulse"
+					title="thinking"
+				></span>
+			{:else if lastBid}
+				<span class="text-xs text-white/70">{lastBid}</span>
+			{/if}
+
+			{#if tricks > 0}
+				<span class="ml-auto text-[11px] whitespace-nowrap text-white/45"
+					>{tricks} {tricks === 1 ? 'trick' : 'tricks'}</span
+				>
+			{/if}
+		</div>
 	</div>
 </div>
 
