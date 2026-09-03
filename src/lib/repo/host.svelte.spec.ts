@@ -13,7 +13,7 @@ function setup(clientId: string) {
 	const handle = repo.create(
 		createGame('HOSTTEST', 0) as unknown as Record<string, unknown>
 	) as unknown as DocHandle<GameDoc>;
-	const store = new GameStore(handle, clientId);
+	const store = new GameStore(handle, '', clientId);
 	const presence = new Presence(handle, clientId);
 	const host = new Host(store, presence, {
 		minDelayMs: 0,
