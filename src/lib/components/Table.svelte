@@ -413,7 +413,7 @@
 				data-status-slot
 			>
 				<div
-					class="absolute left-1/2 mb-2 flex w-full -translate-x-1/2 flex-col items-center gap-2"
+					class="absolute left-1/2 z-20 mb-2 flex w-full -translate-x-1/2 flex-col items-center gap-2"
 					style:bottom="calc(100% + {panelH}px)"
 					data-banner-layer
 				>
