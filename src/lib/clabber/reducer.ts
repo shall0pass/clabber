@@ -51,6 +51,11 @@ export function reduce(doc: GameDoc, action: Action): void {
 		case 'SetDifficulty':
 			doc.difficulty = action.level;
 			return;
+		case 'SetListed':
+			if (doc.phase !== 'lobby')
+				fail(`the public listing can only change in the lobby (phase ${doc.phase})`);
+			doc.listed = action.on;
+			return;
 		case 'StartHand':
 			return startHand(doc, action);
 		case 'Bid':

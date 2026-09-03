@@ -16,6 +16,7 @@ export function createGame(code: string, now: number = Date.now()): GameDoc {
 		code,
 		createdAt: now,
 		hostActorId: '',
+		listed: false,
 		players: [null, null, null, null],
 		phase: 'lobby',
 		advanced: true,

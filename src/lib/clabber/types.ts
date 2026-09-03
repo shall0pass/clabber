@@ -134,6 +134,12 @@ export interface GameDoc {
 	createdAt: number;
 	hostActorId: string;
 
+	/** Opt-in: while in the lobby, advertise this game on the public
+	 *  "looking for players" list on the join screen. The elected host
+	 *  publishes and periodically refreshes the listing; it is dropped when the
+	 *  game fills, the first hand is dealt, or this is turned back off. */
+	listed?: boolean;
+
 	/** Length 4, indexed by seat; `null` is an empty seat. */
 	players: (PlayerSlot | null)[];
 

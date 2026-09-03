@@ -14,9 +14,14 @@
 
 import type { GameStore } from './gameStore.svelte';
 import type { Presence } from './presence.svelte';
+import { publishGame, unpublishGame } from './directory';
 import { HOST_STALE_MS, nextBotAction, pickHost } from '$lib/clabber/host';
 import { SEATS } from '$lib/clabber/state';
 import type { Seat } from '$lib/clabber/types';
+
+/** How often the host refreshes this game's public "looking for players"
+ *  listing. Must comfortably beat the registry's ~120s expiry. */
+const LISTING_BEAT_MS = 30_000;
 
 export interface HostOptions {
 	/** Humanising think-time bounds for a bot move (ms). */
@@ -64,6 +69,10 @@ export class Host {
 	#running = false;
 	#absentSince = new Map<Seat, number>();
 	#onChange = () => this.#reconcile();
+	/** Whether this tab currently has an open-game listing published, and when
+	 *  it was last refreshed — so the heartbeat stays throttled. */
+	#listingUp = false;
+	#lastListingBeat = 0;
 
 	constructor(store: GameStore, presence: Presence, opts: HostOptions = {}) {
 		this.#store = store;
@@ -94,12 +103,48 @@ export class Host {
 		clearTimeout(this.#moveTimer);
 		this.#tickTimer = this.#moveTimer = undefined;
 		this.#absentSince.clear();
+		if (this.#listingUp) {
+			this.#listingUp = false;
+			void unpublishGame(this.#store.code);
+		}
 	}
 
 	#tick(): void {
 		if (!this.#running) return;
 		this.#elect();
 		this.#coverAbsentPlayers();
+		this.#syncListing();
+	}
+
+	/** Keep this game's public "looking for players" listing in step with the
+	 *  doc: publish/refresh it while the host, in the lobby, `listed`, with at
+	 *  least one human and a free seat; otherwise take it down. Only the elected
+	 *  host touches the registry. */
+	#syncListing(): void {
+		const doc = this.#store.doc;
+		const players = doc?.players ?? [];
+		const humans = players.filter((p) => p != null && !p.isBot);
+		const wantsListing =
+			this.isHost &&
+			doc?.phase === 'lobby' &&
+			!!doc.listed &&
+			humans.length > 0 &&
+			players.some((p) => p == null);
+
+		if (wantsListing) {
+			const now = Date.now();
+			if (this.#listingUp && now - this.#lastListingBeat < LISTING_BEAT_MS) return;
+			this.#listingUp = true;
+			this.#lastListingBeat = now;
+			void publishGame(this.#store.code, this.#store.url, {
+				host: humans[0]!.name,
+				seats: players.filter((p) => p != null).length
+			});
+		} else if (this.#listingUp) {
+			this.#listingUp = false;
+			this.#lastListingBeat = 0;
+			void unpublishGame(this.#store.code);
+		}
 	}
 
 	#onlineClientIds(): string[] {
@@ -171,6 +216,7 @@ export class Host {
 		clearTimeout(this.#moveTimer);
 		this.#moveTimer = undefined;
 		this.#coverAbsentPlayers();
+		this.#syncListing();
 		if (!this.isHost) return;
 
 		const doc = this.#store.doc;

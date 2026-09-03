@@ -261,6 +261,11 @@
 	});
 	$effect(() => () => clearTimeout(revealTimer));
 
+	// Measured height of the bottom-anchored phase panel, so the banner layer
+	// above it can clear it and the two never overlap (the meld-call picker is
+	// tall enough to reach into the banner zone otherwise). 0 when no panel.
+	let panelH = $state(0);
+
 	// while a completed trick is held on screen, pulse the winner's plate
 	const flashSeat = $derived(doc?.phase === 'trickDone' ? (doc.trick?.winner ?? null) : null);
 
@@ -401,13 +406,15 @@
 			<!-- Everything transient lives here without reflowing the grid or the
 			     hand: the phase panel / renege prompt is anchored to the bottom of
 			     this fixed-height slot and grows upward over the felt; the banners
-			     float just above the slot. -->
+			     float just above it — offset by the panel's measured height so a
+			     tall panel (the meld-call picker) can never sit over a banner. -->
 			<div
 				class="pointer-events-none relative flex min-h-14 w-full max-w-md items-start justify-center"
 				data-status-slot
 			>
 				<div
-					class="absolute bottom-full left-1/2 mb-2 flex w-full -translate-x-1/2 flex-col items-center gap-2"
+					class="absolute left-1/2 mb-2 flex w-full -translate-x-1/2 flex-col items-center gap-2"
+					style:bottom="calc(100% + {panelH}px)"
 					data-banner-layer
 				>
 					{#if announceBanner}
@@ -441,7 +448,10 @@
 					{/if}
 				</div>
 
-				<div class="absolute bottom-0 left-1/2 flex -translate-x-1/2 flex-col items-center">
+				<div
+					bind:clientHeight={panelH}
+					class="absolute bottom-0 left-1/2 flex -translate-x-1/2 flex-col items-center"
+				>
 					{#if pendingCall && mySeat != null}
 						<div
 							class="pointer-events-auto flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/60"
@@ -567,7 +577,12 @@
 			</span>
 		{/if}
 
-		<LogFeed log={doc.log} players={doc.players} {mySeat} />
+		<!-- The log narrates illegal cards and beaten melds outright, so it's a
+		     Learning-mode aid only — in renege play catching that is the players'
+		     job. -->
+		{#if !advanced}
+			<LogFeed log={doc.log} players={doc.players} {mySeat} />
+		{/if}
 	</div>
 
 	<!-- Outside the .lost filter so the fixed overlays position against the

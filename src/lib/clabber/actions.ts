@@ -16,6 +16,9 @@ export type Action =
 	/** Set the computer-player skill, game-wide. Only tunes bot behaviour, so it
 	 *  is allowed in any phase. */
 	| { type: 'SetDifficulty'; level: Difficulty }
+	/** Opt this game in or out of the public "looking for players" list. Only
+	 *  meaningful in the lobby; the elected host acts on it. */
+	| { type: 'SetListed'; on: boolean }
 	/** Deal the next hand. From `handScored` the deal advances to the next
 	 *  dealer; from `redeal` (or the first hand) it keeps the current dealer. */
 	| { type: 'StartHand'; seed: string }

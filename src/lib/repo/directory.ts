@@ -70,3 +70,56 @@ export async function claimCode(code: string, url: string): Promise<boolean> {
 	if (res.status === 409) return false;
 	throw new Error(`could not claim code (${res.status})`);
 }
+
+// --- open games (the "looking for players" list) ------------------------
+
+/** A game that has opted in to being publicly listed while it waits for
+ *  players. `host` is the first human's display name; `seats` is how many of
+ *  the four seats are filled. */
+export interface OpenGame {
+	code: string;
+	url: string;
+	host: string;
+	seats: number;
+	updatedAt: number;
+}
+
+/** Games currently advertising for players, newest heartbeat first. `[]` when
+ *  no registry is reachable — the feature just doesn't appear in that case. */
+export async function listOpenGames(): Promise<OpenGame[]> {
+	try {
+		const res = await fetch('/games');
+		if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return [];
+		const body = (await res.json()) as { games?: OpenGame[] };
+		return Array.isArray(body.games) ? body.games : [];
+	} catch {
+		return [];
+	}
+}
+
+/** Publish (or refresh — this doubles as the heartbeat) a game's open listing.
+ *  Best-effort: a registry that is down just means the game isn't listed. */
+export async function publishGame(
+	code: string,
+	url: string,
+	info: { host: string; seats: number }
+): Promise<void> {
+	try {
+		await fetch(`/games/${encodeURIComponent(normaliseCode(code))}`, {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ url, listed: true, host: info.host, seats: info.seats })
+		});
+	} catch {
+		/* best-effort */
+	}
+}
+
+/** Remove a game's open listing (it stays joinable by code). Best-effort. */
+export async function unpublishGame(code: string): Promise<void> {
+	try {
+		await fetch(`/games/${encodeURIComponent(normaliseCode(code))}`, { method: 'DELETE' });
+	} catch {
+		/* best-effort */
+	}
+}

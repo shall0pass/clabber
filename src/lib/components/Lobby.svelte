@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { SEATS, partnerSeat, pickBotNames } from '$lib/clabber';
 	import type { Seat as SeatIndex } from '$lib/clabber/types';
 	import type { GameStore } from '$lib/repo/gameStore.svelte';
 	import type { Presence } from '$lib/repo/presence.svelte';
+	import { registryAvailable } from '$lib/repo/directory';
+	import { JOIN_CODES_SUPPORTED } from '$lib/repo/repo';
 	import SeatSlot from './Seat.svelte';
 	import LeaveButton from './LeaveButton.svelte';
 
@@ -39,6 +42,14 @@
 
 	const DIFFICULTIES = ['easy', 'normal', 'expert'] as const;
 	const difficulty = $derived(doc?.difficulty ?? 'expert');
+
+	// The public "looking for players" list only exists where a join-code
+	// registry is reachable; hide the toggle otherwise.
+	let codesUsable = $state(JOIN_CODES_SUPPORTED);
+	onMount(async () => {
+		if (!codesUsable && (await registryAvailable())) codesUsable = true;
+	});
+	const listed = $derived(doc?.listed ?? false);
 
 	// slot 0 bottom, 1 left, 2 top, 3 right — rotated so my seat is at the bottom.
 	const slotClass = ['area-bottom', 'area-left', 'area-top', 'area-right'];
@@ -86,6 +97,9 @@
 	}
 	function chooseDifficulty(level: (typeof DIFFICULTIES)[number]) {
 		store.change({ type: 'SetDifficulty', level });
+	}
+	function toggleListed() {
+		store.change({ type: 'SetListed', on: !listed });
 	}
 
 	let copied = $state(false);
@@ -220,6 +234,26 @@
 			</span>
 		</span>
 	</label>
+
+	{#if codesUsable}
+		<label
+			class="flex max-w-sm cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-4 py-3 text-sm ring-1 ring-white/10"
+		>
+			<input
+				type="checkbox"
+				class="mt-0.5 h-4 w-4 accent-amber-400"
+				checked={listed}
+				onchange={toggleListed}
+			/>
+			<span>
+				<span class="font-semibold">Public game</span>
+				<span class="mt-0.5 block text-white/50">
+					Lists this game on the join screen so anyone can drop in while you wait. It comes off the
+					list automatically once all four seats are filled or the first hand is dealt.
+				</span>
+			</span>
+		</label>
+	{/if}
 </div>
 
 <style>

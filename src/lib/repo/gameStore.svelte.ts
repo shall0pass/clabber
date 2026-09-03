@@ -82,11 +82,15 @@ type Init = Parameters<ReturnType<typeof getRepo>['create']>[0];
 
 /** Create a brand-new game. Registers a short join code if a registry is
  *  reachable; otherwise the shareable identifier is the document id and the
- *  game is joined by invite link. */
-export async function createNewGame(): Promise<GameStore> {
+ *  game is joined by invite link. Pass `listed: true` to advertise it on the
+ *  public "looking for players" list while it waits in the lobby. */
+export async function createNewGame({
+	listed = false
+}: { listed?: boolean } = {}): Promise<GameStore> {
 	const repo = getRepo();
 	const handle = repo.create(createGame(makeCode()) as Init) as DocHandle<GameDoc>;
 	await handle.whenReady();
+	if (listed) handle.change((d) => (d.listed = true));
 
 	for (let attempt = 0; attempt < 6; attempt++) {
 		const code = makeCode();
