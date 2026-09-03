@@ -44,56 +44,73 @@ describe('GameStore', () => {
 
 describe('GameStore card encryption', () => {
 	const PLAIN_CARD = /^[AKQJT9][SHDC]$/;
+	const isBlob = (c: string) => c.startsWith('e1:');
 
-	function encryptedStore() {
+	function encryptedStore(clientId = 'me') {
 		const repo = new Repo({});
 		const handle = repo.create(
 			createGame('', 0) as unknown as Record<string, unknown>
 		) as unknown as DocHandle<GameDoc>;
 		handle.change((d) => ((d as unknown as GameDoc).code = 'the-doc-id'));
 		// a short join code turns encryption on
-		return { store: new GameStore(handle, 'ABCDE', 'me'), handle };
+		return { store: new GameStore(handle, 'ABCDE', clientId), handle };
 	}
 
-	it('stores hands and seed as ciphertext but exposes plaintext to the app', async () => {
+	/** me at seat 0; the other three seats are `spec` ('bot' | 'human'). */
+	function seatUp(store: GameStore, spec: ('bot' | 'human')[]) {
+		store.change({ type: 'JoinSeat', seat: 0, name: 'Me', actorId: 'me' });
+		spec.forEach((kind, i) => {
+			const seat = (i + 1) as 1 | 2 | 3;
+			if (kind === 'bot') store.change({ type: 'SetBot', seat, isBot: true, botName: `B${seat}` });
+			else store.change({ type: 'JoinSeat', seat, name: `H${seat}`, actorId: `h${seat}` });
+		});
+	}
+
+	it('every hand and the seed are ciphertext in the synced document', async () => {
 		const { store, handle } = encryptedStore();
-		for (let seat = 0; seat < 4; seat++) {
-			store.change({
-				type: 'SetBot',
-				seat: seat as 0 | 1 | 2 | 3,
-				isBot: true,
-				botName: `B${seat}`
-			});
-		}
+		seatUp(store, ['bot', 'bot', 'bot']);
 		store.change({ type: 'StartHand', seed: 'deadbeef' });
 		await tick();
 
 		const raw = handle.doc() as unknown as GameDoc;
 		expect(raw.hands.flat().length).toBe(24);
-		expect(raw.hands.flat().some((c) => PLAIN_CARD.test(c))).toBe(false);
-		expect(raw.seed).not.toBe('deadbeef');
+		expect(raw.hands.flat().every(isBlob)).toBe(true);
+		expect(isBlob(raw.seed)).toBe(true);
 		// the real join code never reaches the document
 		expect(raw.code).toBe('the-doc-id');
-
-		expect(store.doc!.hands.flat().length).toBe(24);
-		expect(store.doc!.hands.flat().every((c) => PLAIN_CARD.test(c))).toBe(true);
-		expect(store.doc!.seed).toBe('deadbeef');
 	});
 
-	it('a played card moves out of the (encrypted) hand into the plaintext trick', async () => {
-		const { store, handle } = encryptedStore();
-		for (let seat = 0; seat < 4; seat++) {
-			store.change({
-				type: 'SetBot',
-				seat: seat as 0 | 1 | 2 | 3,
-				isBot: true,
-				botName: `B${seat}`
-			});
-		}
+	it('the local snapshot decrypts only my own hand, not another human', async () => {
+		const { store } = encryptedStore('me');
+		seatUp(store, ['human', 'bot', 'bot']); // not the host — hostActorId is unset
 		store.change({ type: 'StartHand', seed: 'deadbeef' });
 		await tick();
 
-		// accept the up-card so someone is on lead, then play the leader's first card
+		expect(store.doc!.hands[0].every((c) => PLAIN_CARD.test(c))).toBe(true);
+		expect(store.doc!.hands[1].every(isBlob)).toBe(true); // opponent human
+		expect(store.doc!.hands[2].every(isBlob)).toBe(true); // bots — I'm not running them
+		expect(isBlob(store.doc!.seed)).toBe(true); // no deal seed to recompute hands from
+	});
+
+	it('the elected host also sees the bot hands it has to run', async () => {
+		const { store } = encryptedStore('me');
+		seatUp(store, ['bot', 'bot', 'bot']);
+		store.change({ type: 'HostClaim', actorId: 'me' });
+		store.change({ type: 'StartHand', seed: 'deadbeef' });
+		await tick();
+
+		for (const s of [0, 1, 2, 3] as const) {
+			expect(store.doc!.hands[s].every((c) => PLAIN_CARD.test(c))).toBe(true);
+		}
+	});
+
+	it('a played card moves out of the (encrypted) hand into the plaintext trick', async () => {
+		const { store, handle } = encryptedStore('me');
+		seatUp(store, ['bot', 'bot', 'bot']);
+		store.change({ type: 'HostClaim', actorId: 'me' }); // so I can see the bot leader's hand
+		store.change({ type: 'StartHand', seed: 'deadbeef' });
+		await tick();
+
 		const dealer = store.doc!.dealer;
 		const leader = ((dealer + 1) % 4) as 0 | 1 | 2 | 3;
 		store.change({ type: 'Bid', seat: leader, bid: 'accept' });

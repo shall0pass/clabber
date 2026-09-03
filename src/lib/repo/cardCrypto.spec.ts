@@ -102,6 +102,19 @@ describe('decryptDoc / encryptDoc', () => {
 		const wrong = decryptDoc(enc, deriveKey('ZZZZZ')!);
 		expect((wrong.hands as string[][])[0].every(looksEncrypted)).toBe(true);
 	});
+
+	it('scope limits which seats, the seed and couldHave are revealed', () => {
+		const enc = encryptDoc(dealtDoc() as unknown as Record<string, unknown>, KEY);
+		const view = decryptDoc(enc, KEY, { seats: [0, 2], seed: false, couldHave: false });
+
+		expect(view.hands[0]).toEqual(['AS', 'KH']); // in scope
+		expect(view.hands[2]).toEqual(['QS', 'JH']); // in scope
+		expect((view.hands[1] as string[]).every(looksEncrypted)).toBe(true); // out of scope
+		expect(looksEncrypted(view.seed)).toBe(true); // seed withheld
+		expect((view.renege!.couldHave as string[]).every(looksEncrypted)).toBe(true);
+		// the in-scope seat's declared-meld cards come back too
+		expect(view.melds.declared[0]![0].cards).toEqual(['AS', 'KS', 'QS', 'JS']);
+	});
 });
 
 describe('mergeEncrypted', () => {

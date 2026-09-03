@@ -51,9 +51,28 @@ export class GameStore {
 		});
 	}
 
-	/** A plaintext view of a synced document snapshot. */
+	/**
+	 * A plaintext view of a synced document snapshot — but only of the hands this
+	 * client may legitimately see: its own seat, plus every bot seat when it is
+	 * the elected host (which has to run them). Other players' hands, and the deal
+	 * seed, stay as ciphertext in `this.doc`, so opening devtools no longer hands
+	 * someone the whole table. A determined player can still re-derive the key
+	 * from the join code; this only removes the zero-effort peek.
+	 */
 	#decode(raw: GameDoc): GameDoc {
-		return this.#key ? decryptDoc(raw as unknown as Record<string, unknown>, this.#key) : raw;
+		if (!this.#key) return raw;
+		const players = raw.players ?? [];
+		const iAmHost = raw.hostActorId === this.clientId;
+		const seats: number[] = [];
+		players.forEach((p, s) => {
+			if (p == null) return;
+			if (p.actorId === this.clientId || (iAmHost && p.isBot)) seats.push(s);
+		});
+		return decryptDoc(raw as unknown as Record<string, unknown>, this.#key, {
+			seats,
+			seed: false,
+			couldHave: iAmHost
+		});
 	}
 
 	get handle(): DocHandle<GameDoc> {
