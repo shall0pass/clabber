@@ -267,9 +267,11 @@ export function hasMeld(s: SeatMeldStatus): boolean {
 }
 
 /** Score the melds that were actually shown during trick two, writing the
- *  outcome into `doc.melds`. Equal opposing melds cancel pairwise; the team
- *  with the best remaining shown meld then scores all of its shown melds.
- *  Bella (from `doc.melds.bella`) always adds 20 for its holder's team. */
+ *  outcome into `doc.melds`. Compare each team's single strongest shown meld:
+ *  the team with the strictly higher one scores the sum of ALL its shown melds
+ *  (matched or not), the other team scores nothing for runs/sets. An exact tie
+ *  between the two strongest melds is a full push — neither team scores. Bella
+ *  (from `doc.melds.bella`) always adds 20 for its holder's team regardless. */
 export function resolveShownMelds(doc: GameDoc): void {
 	const trump = doc.trump;
 	const teamShown: [MeldClaim[], MeldClaim[]] = [[], []];
@@ -277,19 +279,8 @@ export function resolveShownMelds(doc: GameDoc): void {
 		for (const m of doc.melds.shown[s] ?? []) teamShown[teamOf(s)].push(m);
 	}
 
-	// Cancel each pair of exactly-equal melds, one from each team.
-	const t0 = [...teamShown[0]];
-	const t1 = [...teamShown[1]];
-	for (let i = t0.length - 1; i >= 0; i--) {
-		const j = t1.findIndex((b) => compareMeldClaim(t0[i], b, trump) === 0);
-		if (j >= 0) {
-			t0.splice(i, 1);
-			t1.splice(j, 1);
-		}
-	}
-
-	const best0 = bestMeld(t0, trump);
-	const best1 = bestMeld(t1, trump);
+	const best0 = bestMeld(teamShown[0], trump);
+	const best1 = bestMeld(teamShown[1], trump);
 	const sum = (list: MeldClaim[]) => list.reduce((n, c) => n + c.points, 0);
 
 	const points: [number, number] = [0, 0];
@@ -298,11 +289,12 @@ export function resolveShownMelds(doc: GameDoc): void {
 		const cmp = compareMeldClaim(best0, best1, trump);
 		if (cmp > 0) winner = 0;
 		else if (cmp < 0) winner = 1;
+		// cmp === 0: the two strongest melds are equal — nobody scores runs/sets.
 	} else if (best0) winner = 0;
 	else if (best1) winner = 1;
 
-	if (winner === 0) points[0] = sum(t0);
-	else if (winner === 1) points[1] = sum(t1);
+	if (winner === 0) points[0] = sum(teamShown[0]);
+	else if (winner === 1) points[1] = sum(teamShown[1]);
 
 	if (doc.melds.bella != null) points[teamOf(doc.melds.bella)] += 20;
 

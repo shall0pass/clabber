@@ -169,7 +169,7 @@ describe('resolveShownMelds', () => {
 		expect(doc.melds.points).toEqual([100, 20]);
 	});
 
-	it('cancels two equal shown melds so neither scores', () => {
+	it('two equal top melds are a push so neither team scores', () => {
 		const doc = docWithShown([
 			['9H', 'TH', 'JH', 'AS', 'KC', 'AD'], // team 0: dad in hearts, top J
 			['9C', 'TC', 'JC', 'KD', 'QD', 'AH'], // team 1: dad in clubs, top J
@@ -181,7 +181,7 @@ describe('resolveShownMelds', () => {
 		expect(doc.melds.points).toEqual([0, 0]);
 	});
 
-	it('cancels the matching pair but still scores an unmatched meld', () => {
+	it('the best-meld team scores every meld it showed, including ones the other team matched', () => {
 		const doc = createGame('T', 0);
 		doc.trump = 'S';
 		const dadH: MeldClaim = {
@@ -208,12 +208,59 @@ describe('resolveShownMelds', () => {
 			points: 50,
 			top: 4
 		};
-		doc.melds.shown[0] = [dadH, fiftyH]; // team 0
-		doc.melds.shown[1] = [dadC]; // team 1 — cancels dadH
+		doc.melds.shown[0] = [dadH, fiftyH]; // team 0 — wins the contest with the fifty
+		doc.melds.shown[1] = [dadC]; // team 1 — matches team 0's dad but is still beaten
 		resolveShownMelds(doc);
 		expect(doc.melds.scoredTeam).toBe(0);
-		// dadH / dadC cancel and score nothing; the unmatched fifty still scores.
-		expect(doc.melds.points).toEqual([50, 0]);
+		// Team 0 has the single best meld (fifty) so it scores both its melds; the
+		// matched dad is NOT knocked out. Team 1 scores nothing.
+		expect(doc.melds.points).toEqual([70, 0]);
+	});
+
+	it("the winning team's matched dad still scores alongside its top meld", () => {
+		const doc = createGame('T', 0);
+		doc.trump = 'S';
+		const dad = (suit: Suit, cards: Card[]): MeldClaim => ({
+			kind: 'dad',
+			group: 'run',
+			suit,
+			cards,
+			points: 20,
+			top: 3
+		});
+		const hundred: MeldClaim = {
+			kind: 'hundred',
+			group: 'run',
+			suit: 'C',
+			cards: ['9C', 'TC', 'JC', 'QC', 'KC'],
+			points: 100,
+			top: 5
+		};
+		doc.melds.shown[0] = [dad('H', ['9H', 'TH', 'JH'])]; // team 0: dad, top J
+		doc.melds.shown[1] = [dad('D', ['9D', 'TD', 'JD']), hundred]; // team 1: matched dad + hundred
+		resolveShownMelds(doc);
+		expect(doc.melds.scoredTeam).toBe(1);
+		// team 1 wins with the hundred and scores both its melds: 20 + 100.
+		expect(doc.melds.points).toEqual([0, 120]);
+	});
+
+	it('a trump dad wins the contest and the partner’s matched dad still scores', () => {
+		const doc = createGame('T', 0);
+		doc.trump = 'S';
+		const dad = (suit: Suit, cards: Card[], top: number): MeldClaim => ({
+			kind: 'dad',
+			group: 'run',
+			suit,
+			cards,
+			points: 20,
+			top
+		});
+		doc.melds.shown[0] = [dad('H', ['9H', 'TH', 'JH'], 3)]; // team 0: non-trump dad, top J
+		doc.melds.shown[1] = [dad('S', ['9S', 'TS', 'JS'], 3)]; // team 1 seat 1: trump dad, top J — wins
+		doc.melds.shown[3] = [dad('D', ['9D', 'TD', 'JD'], 3)]; // team 1 seat 3: non-trump dad, top J
+		resolveShownMelds(doc);
+		expect(doc.melds.scoredTeam).toBe(1);
+		expect(doc.melds.points).toEqual([0, 40]);
 	});
 });
 

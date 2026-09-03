@@ -191,7 +191,8 @@ function meldSection(doc: GameDoc, mySeat: Seat | null): CoachSection {
 function meldShowSection(doc: GameDoc, mySeat: Seat | null, who: Who): CoachSection {
 	const points: string[] = [
 		'It’s trick two: players show the meld they called, in turn order, each just before playing their card.',
-		'You may only show a meld that isn’t below one the other team has already shown. An equal meld can be shown — the two then cancel and neither scores (a 9-10-J dad cancels another 9-10-J dad).',
+		'You may only show a meld that isn’t below one the other team has already shown. An equal meld can still be shown.',
+		'At the end of trick two the team with the single best shown meld scores every meld it showed; the other team scores nothing for runs and sets. If the two teams’ best melds are exactly equal, nobody scores meld that deal (a 9-10-J dad against a 9-10-J dad, with nothing bigger behind either).',
 		'If your meld is beaten you simply don’t show it and it doesn’t count — even if your partner shows something bigger later. Showing a meld that’s lower than one already shown is a renege.',
 		'Bella still always scores, whatever happens here.'
 	];
