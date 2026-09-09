@@ -1,0 +1,13 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(npm run *)",
+			"Bash(npx prettier *)",
+			"Bash(npx tsx *)",
+			"Bash(timeout 15 /home/npaulin/opt/mysql8/bin/mysql --defaults-file=/home/npaulin/mysql/my.cnf -u root -ptvstudy -e ' *)",
+			"Bash(bash /tmp/claude-1000/-home-npaulin-git-lr-web/2faffbb2-95e2-49eb-8404-66b71c003331/scratchpad/rerun_stations.sh)",
+			"Bash(npm test *)",
+			"Bash(grep -nE 'TVSTUDY_HOME|isPtelevAvailable|process\\\\.env|\\\\$env' /home/npaulin/git/lr-web/src/lib/server/fcc/officialCurveOracle.ts)"
+		]
+	}
+}

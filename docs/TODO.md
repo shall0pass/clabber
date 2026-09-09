@@ -1,0 +1,1 @@
+1. Consider a landscape view to allow a larger view of cards on mobile devices.  All players and cards should be viewable on the screen without scrolling.
