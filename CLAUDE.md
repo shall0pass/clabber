@@ -1,22 +1,45 @@
-# Project goals
+# Project Instructions
 
-My goal is to make a computer card game where 4 people can join and play together. If all 4 players can't join, computers need to play the hands automatically.  The card game is clabber and the rules are in the artifacts folder.
+## Project
 
-## Joining a game
+See `docs/PROJECT.md` for the project's goals and requirements.
 
-When someone comes to the game, they are greeted with a text input box that they need to put in the secret code to join their friends.  This game should use automerge CRDT technology to keep the game up to date for everyone  because everyone will be on a different computer.  The secret code will connect them to the automerge address.
+## Architecture
 
-After they join, they should get an option to "sit down" with an already present user or decide to play on the other team.  let them pick a seat.  They should also get to pick their own name.  use a pencil icon to change it.  If the computers are playing, put a little computer icon next to their name and give them funny names like Rainbow Goose or Michael Jordan.
+See `docs/ARCHITECTURE.md` for architectural decisions.
 
-Only one player can play a card at a time.
+## Current Work
 
-## Cards
+See `docs/TODO.md` for current priorities.
 
-There are playing card images in the artifacts.  The game should be played on a green table.  Players should be shown a round table and the user should be seated at the bottom of the table.  The person across (at the top) is the users partner.
+## Documentation
 
-## Winning
+Keep `docs/ARCHITECTURE.md` and `docs/TODO.md` up to date as new issues arise.
 
-I want to see fireworks for the winning team and tears of sadness for the losers.
+## Agent Strategy
 
-## Next steps
-2. On a mobile device, it would be nice to be able to drag my finger over the cards so i can see which one i'm selecting.  The touch targets are a little small.
+Use the Scout, Engineer, and Architect agents according to the
+multi-model workflow defined below.
+
+## User Manual
+
+Maintain a users manual in docs/USER_MANUAL.md when a new feature is added or changed.
+
+# Project
+
+This is a Longley-Rice propagation analysis application.
+
+The primary objectives are:
+1. Fast calculation
+2. Low memory usage
+3. Accurate terrain handling
+4. Results consistent with the reference implementation
+5. Excellent correlation with both VSoft and TVStudy
+
+## Development Rules
+
+- Preserve existing behavior unless a change is intentional.
+- Prefer measured performance over assumptions.
+- Do not load large datasets into memory unnecessarily.
+- Run relevant tests after changes.
+- For significant architectural decisions, use the Architect agent.
