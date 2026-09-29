@@ -14,10 +14,15 @@ import type { Presence } from '$lib/repo/presence.svelte';
 // prompt are now absolutely positioned in a fixed-height slot, so none of them
 // reflows `.table-grid`.
 
-function fourBotsAtMeld(): GameDoc {
+function fourBotsAtBid(): GameDoc {
 	const doc = createGame('jitter', 0);
 	for (const s of SEATS) reduce(doc, { type: 'SetBot', seat: s, isBot: true, botName: `Bot ${s}` });
 	reduce(doc, { type: 'StartHand', seed: 'jitter-1' });
+	return doc;
+}
+
+function fourBotsAtMeld(): GameDoc {
+	const doc = fourBotsAtBid();
 	reduce(doc, { type: 'Bid', seat: doc.bidding!.turn, bid: 'accept' }); // trump made → phase 'meld'
 	return doc;
 }
@@ -83,6 +88,41 @@ describe('Table layout stability', () => {
 		expect(Math.abs(c.left - a.left)).toBeLessThanOrEqual(1);
 	});
 
+	// The trick cards are sized from a measurement of their cell, so anything
+	// that changed the cell mid-hand (a plate gaining its MADE badge or its
+	// "1 trick" label, a panel) would resize them. Bidding (no maker) → meld
+	// (MADE badge, no tricks won) → trick two (tricks won) → trickDone must
+	// all measure the same.
+	for (const [w, h] of [
+		[375, 667],
+		[667, 375],
+		[1024, 768]
+	] as const) {
+		it(`${w}x${h}: the trick card size does not change across phases`, async () => {
+			await page.viewport(w, h);
+			const cardH = () => (document.querySelector('[data-card-h]') as HTMLElement).dataset.cardH;
+			const { rerender } = render(Table, props(fourBotsAtBid()));
+			await new Promise((r) => setTimeout(r, 400));
+			const a = cardH();
+			const cell = document.querySelector('[data-trick-area]')!.getBoundingClientRect();
+
+			await rerender(props(meldDoc()));
+			await new Promise((r) => setTimeout(r, 200));
+			expect(cardH()).toBe(a);
+
+			await rerender(props(trickDoc()));
+			await new Promise((r) => setTimeout(r, 200));
+			expect(cardH()).toBe(a);
+
+			await rerender(props(trickDoneDoc()));
+			await new Promise((r) => setTimeout(r, 200));
+			expect(cardH()).toBe(a);
+			const cell2 = document.querySelector('[data-trick-area]')!.getBoundingClientRect();
+			expect(Math.abs(cell2.width - cell.width)).toBeLessThanOrEqual(1);
+			expect(Math.abs(cell2.height - cell.height)).toBeLessThanOrEqual(1);
+		});
+	}
+
 	it('the transient region is out of flow (absolute) and height-reserved', async () => {
 		render(Table, props(meldDoc()));
 		await settle();
@@ -95,4 +135,95 @@ describe('Table layout stability', () => {
 		expect(getComputedStyle(banners).position).toBe('absolute');
 		expect(getComputedStyle(panel).position).toBe('absolute');
 	});
+});
+
+// docs/responsive-layout-plan.md §Verification/4 — a portrait and a landscape
+// viewport, neither scrolls, and the hand/plates/trick area are all fully
+// inside the visible viewport (not just "the document doesn't scroll" —
+// content can still be silently clipped by `overflow-hidden` even when it
+// is, which is what `scripts/layout-check.mjs` is for at a fuller matrix).
+describe('Table layout fits the viewport', () => {
+	const insideViewport = (r: DOMRect, w: number, h: number) => {
+		const margin = 0.5;
+		expect(r.top).toBeGreaterThanOrEqual(-margin);
+		expect(r.left).toBeGreaterThanOrEqual(-margin);
+		expect(r.right).toBeLessThanOrEqual(w + margin);
+		expect(r.bottom).toBeLessThanOrEqual(h + margin);
+	};
+
+	for (const [w, h] of [
+		[390, 844],
+		[844, 390]
+	] as const) {
+		it(`${w}x${h}: no overflow, hand/plates/trick area all on-screen`, async () => {
+			await page.viewport(w, h);
+			render(Table, props(trickDoc()));
+			// Two independent `ResizeObserver`s (the table root, the trick area's
+			// own leftover cell) settle over a couple of animation frames —
+			// `settle()`'s 60ms is enough for the jitter tests above but not
+			// always for this.
+			await new Promise((r) => setTimeout(r, 400));
+
+			expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(h + 1);
+			expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(w + 1);
+
+			const hand = document.querySelector('[aria-label="your hand"]');
+			expect(hand).toBeTruthy();
+			insideViewport(hand!.getBoundingClientRect(), w, h);
+
+			insideViewport(gridRect(), w, h);
+
+			const trickArea = document.querySelector('[data-trick-area]');
+			expect(trickArea).toBeTruthy();
+			insideViewport(trickArea!.getBoundingClientRect(), w, h);
+		});
+	}
+});
+
+// Follow-up pass item 4 — the trick area used to sit at its floor (56px) while
+// the hand grew close to its cap (up to 169px), a lopsided split. This
+// measures the *real* rendered sizes (not the formulas that produce them —
+// the trick area's size comes from a live measurement, so a pure-function
+// test can't see it) across the viewport matrix and checks the trick area is
+// a reasonable fraction of the hand wherever neither is pinned to its floor
+// (right at a floor, a bigger ratio usually isn't achievable — see
+// tableLayout.ts's HAND_FLOOR/TRICK_FLOOR).
+describe('Table hand/trick size ratio', () => {
+	const MATRIX: [number, number][] = [
+		[320, 568],
+		[375, 667],
+		[390, 844],
+		[430, 932],
+		[768, 1024],
+		[568, 320],
+		[667, 375],
+		[844, 390],
+		[932, 430],
+		[1024, 768],
+		[1440, 900]
+	];
+	const FLOOR = 56; // tableLayout.ts's HAND_FLOOR / TRICK_FLOOR
+	const MIN_RATIO = 0.6;
+
+	for (const [w, h] of MATRIX) {
+		it(`${w}x${h}: trick card height is a reasonable fraction of the hand's`, async () => {
+			await page.viewport(w, h);
+			render(Table, props(trickDoc()));
+			await new Promise((r) => setTimeout(r, 400));
+
+			const handCard = document.querySelector('[aria-label="your hand"] .card') as HTMLElement;
+			const trickBox = document.querySelector('[data-card-h]') as HTMLElement;
+			expect(handCard).toBeTruthy();
+			expect(trickBox).toBeTruthy();
+
+			const handCardH = handCard.getBoundingClientRect().height;
+			// TrickArea publishes the played-card height it renders at (the puck
+			// has its own floor, so it can't stand in for it).
+			const trickCardH = Number(trickBox.dataset.cardH);
+
+			if (handCardH <= FLOOR + 1 || trickCardH <= FLOOR + 1) return; // a floor binds — excluded
+
+			expect(trickCardH).toBeGreaterThanOrEqual(MIN_RATIO * handCardH);
+		});
+	}
 });

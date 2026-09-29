@@ -26,7 +26,10 @@
 	const recent = $derived(log.slice(-14).map(humanise));
 </script>
 
-<div class="fixed bottom-2 left-2 z-20 text-[11px]">
+<!-- Docks above the hand (plan §6): Table publishes `--dock-bottom` (0 outside
+     a live table, e.g. the lobby doesn't set it) so this never sits over a
+     card. -->
+<div class="fixed left-2 z-20 text-[11px]" style="bottom: calc(var(--dock-bottom, 0px) + 0.5rem)">
 	<button
 		onclick={() => (open = !open)}
 		class="rounded bg-green-950/70 px-2 py-1 text-white/60 ring-1 ring-white/10 hover:text-white"

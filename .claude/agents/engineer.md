@@ -1,7 +1,7 @@
 ---
 name: engineer
 description: Implementation agent for well-specified, self-contained tasks — features, refactors, bug fixes, and tests. Give it a complete brief (goal, files, constraints, definition of done).
-model: sonnet
+model: opus
 effort: medium
 ---
 

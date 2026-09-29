@@ -47,8 +47,11 @@
 	);
 </script>
 
+<!-- In short landscape the seat grid shares the screen with the settings
+     column (Lobby's two-column layout), so seats shrink further there than
+     the vw-based portrait size alone would give them. -->
 <div
-	class="flex w-40 flex-col items-center gap-1.5 rounded-xl bg-green-950/70 p-3 text-center ring-2 {ring}"
+	class="flex w-[min(9rem,26vw)] flex-col items-center gap-1 rounded-xl bg-green-950/70 p-2 text-center ring-2 sm:w-40 sm:gap-1.5 sm:p-3 short-landscape:w-[min(5.5rem,15vw)] short-landscape:gap-0.5 short-landscape:p-1.5 short-landscape:sm:w-[min(5.5rem,15vw)] short-landscape:sm:p-1.5 {ring}"
 >
 	{#if player}
 		<div class="flex items-center gap-1.5">

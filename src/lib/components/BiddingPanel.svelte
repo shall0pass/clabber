@@ -6,7 +6,7 @@
 	import type { GameStore } from '$lib/repo/gameStore.svelte';
 	import type { Bid, Seat } from '$lib/clabber/types';
 
-	let { store }: { store: GameStore } = $props();
+	let { store, cardH = 72 }: { store: GameStore; cardH?: number } = $props();
 
 	const doc = $derived(store.doc);
 	const mySeat = $derived(store.mySeat);
@@ -33,42 +33,41 @@
 </script>
 
 {#if bidding && doc}
+	<!-- One line, always (follow-up pass on docs/responsive-layout-plan.md):
+	     up-card, round text, bids — all inline. This used to have a taller,
+	     stacked variant for wide screens, but a stacked panel growing upward
+	     from the status slot could reach past its reserved height and into the
+	     trick area's played cards; a one-line bar comfortably fits the slot's
+	     fixed `min-h-14` everywhere, so it can't cover a card
+	     (scripts/layout-check.mjs checks this). -->
 	<div
-		class="flex flex-col items-center gap-3 rounded-2xl bg-green-950/85 p-4 ring-1 ring-white/10"
+		class="flex max-w-[90vw] flex-wrap items-center justify-center gap-2 rounded-xl bg-green-950/85 px-3 py-1.5 ring-1 ring-white/10"
 	>
-		<div class="flex items-center gap-3">
-			{#if doc.upCard}
-				<Card card={doc.upCard} height={72} />
+		{#if doc.upCard}
+			<Card card={doc.upCard} height={Math.min(cardH, 48)} />
+		{/if}
+		<span class="text-xs text-white/70">
+			{#if bidding.round === 1}
+				Round 1 — play or pass
+			{:else}
+				Round 2 — name a suit (not {bidding.passedSuit ? SUIT_NAME[bidding.passedSuit] : ''})
 			{/if}
-			<div class="text-sm text-white/70">
-				{#if bidding.round === 1}
-					Round 1 — play or pass this suit
-				{:else}
-					Round 2 — name a suit (not
-					<span class="font-semibold"
-						>{bidding.passedSuit ? SUIT_NAME[bidding.passedSuit] : ''}</span
-					>)
-				{/if}
-			</div>
-		</div>
-
+		</span>
 		{#if myTurn}
-			<div class="flex flex-wrap justify-center gap-2">
-				{#each options as opt (JSON.stringify(opt))}
-					<button
-						onclick={() => send(opt)}
-						class="rounded-lg px-4 py-2 text-sm font-semibold
-							{opt === 'pass'
-							? 'bg-white/10 hover:bg-white/20'
-							: 'bg-amber-300 text-green-950 hover:bg-amber-200'}
-							{typeof opt === 'object' && isRedSuit(opt.suit) ? 'text-red-700' : ''}"
-					>
-						{label(opt)}
-					</button>
-				{/each}
-			</div>
+			{#each options as opt (JSON.stringify(opt))}
+				<button
+					onclick={() => send(opt)}
+					class="rounded-lg px-2.5 py-1 text-xs font-semibold
+						{opt === 'pass'
+						? 'bg-white/10 hover:bg-white/20'
+						: 'bg-amber-300 text-green-950 hover:bg-amber-200'}
+						{typeof opt === 'object' && isRedSuit(opt.suit) ? 'text-red-700' : ''}"
+				>
+					{label(opt)}
+				</button>
+			{/each}
 		{:else}
-			<div class="text-sm text-white/55">Waiting for {turnName}…</div>
+			<span class="text-xs text-white/55">Waiting for {turnName}…</span>
 		{/if}
 	</div>
 {/if}

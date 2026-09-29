@@ -8,7 +8,10 @@
 		active = false,
 		advanced = false,
 		height = 118,
-		onplay
+		selecting = false,
+		selected = [],
+		onplay,
+		ontoggle
 	}: {
 		/** already sorted for display */
 		cards: CardT[];
@@ -20,14 +23,26 @@
 		 *  called as a renege by the other team) */
 		advanced?: boolean;
 		height?: number;
+		/** Meld-call picking mode (plan §5): tapping a card toggles it in/out of
+		 *  the meld being built instead of playing it. Never auto-selects or
+		 *  suggests a meld — the player picks every card themselves. */
+		selecting?: boolean;
+		/** cards currently toggled into the meld being built, while `selecting` */
+		selected?: CardT[];
 		onplay?: (card: CardT) => void;
+		ontoggle?: (card: CardT) => void;
 	} = $props();
 
 	const legalSet = $derived(new Set(legal));
+	const selectedSet = $derived(new Set(selected));
 	const width = $derived(height * (64 / 89));
 	const step = $derived(width * 0.62);
 
+	// While selecting, every card can be tapped (to toggle it) regardless of
+	// whose turn it is or what's legal to play — the meld picker cares about
+	// what's in your hand, not the current trick.
 	function playable(c: CardT) {
+		if (selecting) return true;
 		return active && (advanced || legalSet.has(c));
 	}
 
@@ -53,7 +68,8 @@
 	}
 
 	function onpointerdown(e: PointerEvent) {
-		if (!active || e.pointerType === 'mouse') return;
+		// Drag-to-play is a play gesture; disable it while selecting for a meld.
+		if (selecting || !active || e.pointerType === 'mouse') return;
 		dragging = true;
 		swallowClick = false;
 		activeIdx = idxAt(e.clientX, e.clientY);
@@ -91,6 +107,10 @@
 			swallowClick = false;
 			return;
 		}
+		if (selecting) {
+			ontoggle?.(card);
+			return;
+		}
 		if (!playable(card)) return;
 		onplay?.(card);
 	}
@@ -120,24 +140,29 @@
 	onpointercancel={(e) => endDrag(e, false)}
 >
 	{#each cards as card, i (card)}
+		{@const isSelected = selecting && selectedSet.has(card)}
 		<button
 			type="button"
 			data-playable={playable(card)}
 			class="absolute bottom-0 rounded-[6%] transition-all duration-150 focus:outline-none
-				{playable(card)
-				? 'cursor-pointer hover:-translate-y-4 focus-visible:-translate-y-4 focus-visible:ring-2 focus-visible:ring-amber-300'
-				: active
-					? 'cursor-not-allowed opacity-40'
-					: 'cursor-default'}
-				{activeIdx === i && playable(card)
+				{selecting
+				? 'cursor-pointer hover:-translate-y-3 focus-visible:-translate-y-3 focus-visible:ring-2 focus-visible:ring-amber-300'
+				: playable(card)
+					? 'cursor-pointer hover:-translate-y-4 focus-visible:-translate-y-4 focus-visible:ring-2 focus-visible:ring-amber-300'
+					: active
+						? 'cursor-not-allowed opacity-40'
+						: 'cursor-default'}
+				{isSelected ? '-translate-y-3! ring-2 ring-amber-300' : ''}
+				{!selecting && activeIdx === i && playable(card)
 				? 'z-10 -translate-y-6! ring-2 ring-amber-300'
-				: activeIdx === i
+				: !selecting && activeIdx === i
 					? 'ring-2 ring-white/40'
 					: ''}
-				{activeIdx != null && activeIdx !== i && playable(card) ? 'opacity-60' : ''}"
+				{!selecting && activeIdx != null && activeIdx !== i && playable(card) ? 'opacity-60' : ''}"
 			style:left="{i * step}px"
 			tabindex={playable(card) ? 0 : -1}
 			aria-disabled={!playable(card)}
+			aria-pressed={selecting ? isSelected : undefined}
 			aria-label={card}
 			onclick={() => clickCard(card)}
 		>

@@ -29,12 +29,16 @@
 	}
 </script>
 
-<!-- Bottom-left, above the log toggle. Chat lives in the bottom-right corner, so
-     the two never collide. -->
-<div class="fixed bottom-2 left-2 z-30 flex flex-col items-start gap-2">
+<!-- Bottom-left, above the log toggle, and docked above the hand (plan §6)
+     via `--dock-bottom` — same as LogFeed. Chat lives in the bottom-right
+     corner, so the two never collide. -->
+<div
+	class="fixed left-2 z-30 flex flex-col items-start gap-2"
+	style="bottom: calc(var(--dock-bottom, 0px) + 0.5rem)"
+>
 	{#if open}
 		<div
-			class="max-h-[65vh] w-80 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl bg-green-950/95 p-4 text-left ring-1 ring-white/15"
+			class="max-h-[65dvh] w-80 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl bg-green-950/95 p-4 text-left ring-1 ring-white/15"
 		>
 			<div class="mb-2 flex items-center justify-between gap-3">
 				<h2 class="text-sm font-bold tracking-wide text-amber-200">Training coach</h2>
@@ -65,6 +69,7 @@
 		aria-expanded={open}
 		class="mb-9 rounded-full bg-amber-300 px-3 py-1.5 text-sm font-semibold text-green-950 shadow-lg ring-1 ring-black/10 hover:bg-amber-200"
 	>
-		{open ? 'Hide help' : '🎓 Learn'}
+		<!-- Icon only below 360px, like the Chat button. -->
+		{#if open}Hide help{:else}🎓<span class="ml-1 max-[359px]:sr-only">Learn</span>{/if}
 	</button>
 </div>

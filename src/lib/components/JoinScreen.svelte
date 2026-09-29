@@ -79,19 +79,91 @@
 	}
 </script>
 
-<div class="flex min-h-screen items-center justify-center bg-green-900 p-6 text-white">
-	<div class="w-full max-w-sm rounded-2xl bg-green-950/60 p-8 shadow-xl ring-1 ring-white/10">
-		<h1 class="mb-1 text-center text-3xl font-bold tracking-wide">Clabber</h1>
-		<p class="mb-6 text-center text-sm text-white/60">
+<!-- `h-dvh overflow-hidden`, not `min-h-screen` (plan §1/§8): the card scrolls
+     internally (`overflow-y-auto`) as a safety net only — at the sizes we
+     target it should fit without that ever kicking in. In landscape the open
+     games list sits beside the code/create form instead of above it, so a
+     short landscape phone doesn't have to stack both. -->
+<div
+	class="flex h-dvh w-full items-center justify-center overflow-hidden bg-green-900 p-3 text-white sm:p-6"
+>
+	<div
+		class="grid max-h-full w-full max-w-3xl gap-0 overflow-y-auto rounded-2xl bg-green-950/60 shadow-xl ring-1 ring-white/10 short-landscape:grid-cols-2"
+	>
+		<div class="p-5 sm:p-8 short-landscape:p-5">
+			<h1 class="mb-1 text-center text-2xl font-bold tracking-wide sm:text-3xl">Clabber</h1>
+			<p class="mb-4 text-center text-sm text-white/60 sm:mb-6">
+				{#if codesUsable}
+					Enter your friends' secret code to join.
+				{:else}
+					Start a game, then share the invite link with your friends.
+				{/if}
+			</p>
+
 			{#if codesUsable}
-				Enter your friends' secret code to join.
-			{:else}
-				Start a game, then share the invite link with your friends.
+				<form
+					onsubmit={(e) => {
+						e.preventDefault();
+						join();
+					}}
+				>
+					<input
+						bind:value={code}
+						oninput={() => (code = code.toUpperCase())}
+						placeholder="SECRET CODE"
+						autocomplete="off"
+						autocapitalize="characters"
+						spellcheck="false"
+						class="w-full rounded-lg border-0 bg-white/10 px-4 py-2.5 text-center text-lg font-semibold tracking-[0.3em] text-white uppercase placeholder:tracking-normal placeholder:text-white/30 focus:ring-2 focus:ring-green-400 focus:outline-none sm:py-3"
+					/>
+					<button
+						type="submit"
+						disabled={busy || normaliseCode(code).length < 4}
+						class="mt-3 w-full rounded-lg bg-green-500 py-2.5 font-semibold text-green-950 transition hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-40 sm:py-3"
+					>
+						Join game
+					</button>
+				</form>
+
+				<div class="my-4 flex items-center gap-3 text-xs text-white/40 sm:my-5">
+					<span class="h-px flex-1 bg-white/15"></span>or<span class="h-px flex-1 bg-white/15"
+					></span>
+				</div>
 			{/if}
-		</p>
+
+			<button
+				onclick={create}
+				disabled={busy}
+				class="w-full rounded-lg py-2.5 font-semibold transition disabled:opacity-40 sm:py-3 {codesUsable
+					? 'bg-white/10 hover:bg-white/20'
+					: 'bg-green-500 text-green-950 hover:bg-green-400'}"
+			>
+				Start a new game
+			</button>
+
+			{#if codesUsable}
+				<label class="mt-3 flex cursor-pointer items-center gap-2 text-xs text-white/50">
+					<input type="checkbox" class="h-3.5 w-3.5 accent-green-400" bind:checked={listPublicly} />
+					List this game so anyone can join
+				</label>
+			{/if}
+
+			{#if error}
+				<p class="mt-4 text-center text-sm text-red-300">{error}</p>
+			{/if}
+
+			<p class="mt-4 text-center text-[11px] leading-snug text-white/35 sm:mt-6">
+				{#if codesUsable}
+					Friendly game: everyone's cards live in the shared data, so don't go poking at it.
+				{:else}
+					Already have an invite link? Just open it. Friendly game: everyone's cards live in the
+					shared data, so don't go poking at it.
+				{/if}
+			</p>
+		</div>
 
 		{#if codesUsable && openGamesLoaded}
-			<div class="mb-5">
+			<div class="border-t border-white/10 p-5 short-landscape:border-t-0 short-landscape:border-l">
 				<p class="mb-2 text-xs font-semibold tracking-wide text-white/50 uppercase">
 					Games looking for players
 				</p>
@@ -122,65 +194,5 @@
 				{/if}
 			</div>
 		{/if}
-
-		{#if codesUsable}
-			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					join();
-				}}
-			>
-				<input
-					bind:value={code}
-					oninput={() => (code = code.toUpperCase())}
-					placeholder="SECRET CODE"
-					autocomplete="off"
-					autocapitalize="characters"
-					spellcheck="false"
-					class="w-full rounded-lg border-0 bg-white/10 px-4 py-3 text-center text-lg font-semibold tracking-[0.3em] text-white uppercase placeholder:tracking-normal placeholder:text-white/30 focus:ring-2 focus:ring-green-400 focus:outline-none"
-				/>
-				<button
-					type="submit"
-					disabled={busy || normaliseCode(code).length < 4}
-					class="mt-3 w-full rounded-lg bg-green-500 py-3 font-semibold text-green-950 transition hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-40"
-				>
-					Join game
-				</button>
-			</form>
-
-			<div class="my-5 flex items-center gap-3 text-xs text-white/40">
-				<span class="h-px flex-1 bg-white/15"></span>or<span class="h-px flex-1 bg-white/15"></span>
-			</div>
-		{/if}
-
-		<button
-			onclick={create}
-			disabled={busy}
-			class="w-full rounded-lg py-3 font-semibold transition disabled:opacity-40 {codesUsable
-				? 'bg-white/10 hover:bg-white/20'
-				: 'bg-green-500 text-green-950 hover:bg-green-400'}"
-		>
-			Start a new game
-		</button>
-
-		{#if codesUsable}
-			<label class="mt-3 flex cursor-pointer items-center gap-2 text-xs text-white/50">
-				<input type="checkbox" class="h-3.5 w-3.5 accent-green-400" bind:checked={listPublicly} />
-				List this game so anyone can join
-			</label>
-		{/if}
-
-		{#if error}
-			<p class="mt-4 text-center text-sm text-red-300">{error}</p>
-		{/if}
-
-		<p class="mt-6 text-center text-[11px] leading-snug text-white/35">
-			{#if codesUsable}
-				Friendly game: everyone's cards live in the shared data, so don't go poking at it.
-			{:else}
-				Already have an invite link? Just open it. Friendly game: everyone's cards live in the
-				shared data, so don't go poking at it.
-			{/if}
-		</p>
 	</div>
 </div>

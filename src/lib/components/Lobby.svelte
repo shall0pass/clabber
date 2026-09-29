@@ -114,17 +114,23 @@
 	}
 </script>
 
-<div class="relative flex min-h-screen flex-col items-center gap-6 bg-green-900 p-6 text-white">
-	<div class="absolute top-4 left-4">
+<!-- `h-dvh overflow-hidden` (plan §1/§8): the settings column scrolls
+     internally as a safety net (`overflow-y-auto`); the document itself never
+     does. Short landscape splits into two columns — seat grid left, code +
+     Fill/Deal + settings right — instead of stacking everything in one. -->
+<div
+	class="relative flex h-dvh w-full flex-col items-center gap-2 overflow-hidden bg-green-900 p-3 text-white sm:gap-4 sm:p-6"
+>
+	<div class="absolute top-2 left-2 sm:top-4 sm:left-4">
 		<LeaveButton {onleave} />
 	</div>
 
-	<header class="flex flex-col items-center gap-1">
-		<h1 class="text-xl font-bold tracking-wide">Clabber lobby</h1>
+	<header class="flex flex-col items-center gap-0.5 sm:gap-1">
+		<h1 class="text-lg font-bold tracking-wide sm:text-xl">Clabber lobby</h1>
 		{#if store.code && store.code.length <= 8}
 			<button
 				onclick={copyLink}
-				class="rounded-lg bg-green-950/60 px-3 py-1.5 font-mono text-lg tracking-[0.35em] ring-1 ring-white/10 hover:ring-green-400"
+				class="rounded-lg bg-green-950/60 px-3 py-1 font-mono text-base tracking-[0.35em] ring-1 ring-white/10 hover:ring-green-400 sm:py-1.5 sm:text-lg"
 				title="Copy invite link"
 			>
 				{store.code}
@@ -140,120 +146,141 @@
 		<span class="h-4 text-xs text-green-300">{copied ? 'link copied!' : ''}</span>
 	</header>
 
-	<div class="table-grid">
-		{#each SEATS as seat (seat)}
-			<div class={slotFor(seat)}>
-				<SeatSlot
-					player={players[seat]}
-					online={players[seat]?.isBot || presence.isOnline(players[seat]?.actorId)}
-					isMe={seat === mySeat}
-					relation={relationFor(seat)}
-					canSit={players[seat] == null}
-					canMove={mySeat != null}
-					onsit={() => sit(seat)}
-					onleave={() => leave(seat)}
-					onrename={(name) => rename(seat, name)}
-					onremovebot={() => removeBot(seat)}
-				/>
-			</div>
-		{/each}
-		<div class="area-center felt">
-			<p class="text-sm text-white/70">
-				{#if mySeat == null}
-					Pick a seat to join.
-				{:else}
-					You're seated. Your partner sits across from you.
-				{/if}
-			</p>
-		</div>
-	</div>
-
-	<div class="flex flex-wrap items-center justify-center gap-3">
-		<button
-			onclick={fillWithBots}
-			disabled={filled}
-			class="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20 disabled:opacity-40"
-		>
-			Fill empty seats with computers
-		</button>
-		<button
-			onclick={deal}
-			disabled={!filled || !hasHuman}
-			class="rounded-lg bg-green-500 px-6 py-2 font-bold text-green-950 hover:bg-green-400 disabled:opacity-40"
-			title={!filled ? 'All four seats must be filled' : ''}
-		>
-			Deal
-		</button>
-	</div>
-
 	<div
-		class="flex max-w-sm flex-col gap-2 rounded-lg bg-white/5 px-4 py-3 text-sm ring-1 ring-white/10"
+		class="grid w-full max-w-4xl flex-1 grid-cols-1 items-center justify-center gap-3 overflow-y-auto short-landscape:grid-cols-2 short-landscape:items-start"
 	>
-		<div class="flex items-center justify-between gap-3">
-			<span class="font-semibold">Computer skill</span>
-			<div class="flex overflow-hidden rounded-md ring-1 ring-white/15">
-				{#each DIFFICULTIES as level (level)}
-					<button
-						type="button"
-						onclick={() => chooseDifficulty(level)}
-						class="px-3 py-1 text-xs font-semibold capitalize transition-colors {difficulty ===
-						level
-							? 'bg-amber-400 text-green-950'
-							: 'text-white/70 hover:bg-white/10'}"
-					>
-						{level}
-					</button>
-				{/each}
+		<div class="table-grid mx-auto">
+			{#each SEATS as seat (seat)}
+				<div class={slotFor(seat)}>
+					<SeatSlot
+						player={players[seat]}
+						online={players[seat]?.isBot || presence.isOnline(players[seat]?.actorId)}
+						isMe={seat === mySeat}
+						relation={relationFor(seat)}
+						canSit={players[seat] == null}
+						canMove={mySeat != null}
+						onsit={() => sit(seat)}
+						onleave={() => leave(seat)}
+						onrename={(name) => rename(seat, name)}
+						onremovebot={() => removeBot(seat)}
+					/>
+				</div>
+			{/each}
+			<div class="area-center felt">
+				<p class="text-sm text-white/70">
+					{#if mySeat == null}
+						Pick a seat to join.
+					{:else}
+						You're seated. Your partner sits across from you.
+					{/if}
+				</p>
 			</div>
 		</div>
-		<span class="text-white/50">
-			How sharp the computer players are. Expert never makes a mistake; Normal slips occasionally;
-			Easy plays like a beginner. You can change this any time.
-		</span>
-	</div>
 
-	<label
-		class="flex max-w-sm cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-4 py-3 text-sm ring-1 ring-white/10"
-	>
-		<input
-			type="checkbox"
-			class="mt-0.5 h-4 w-4 accent-amber-400"
-			checked={learning}
-			onchange={toggleLearning}
-		/>
-		<span>
-			<span class="font-semibold">Learning mode</span>
-			<span class="mt-0.5 block text-white/50">
-				For players still getting the hang of it. The game enforces follow-suit so you can't renege,
-				and a “Learn” button at the table gives each player plain-language help about the up-card,
-				meld, and whose-turn rules for whatever's on the table right now.
-				<br />
-				Leave it off for the normal game: players may play any card, and an illegal one only costs the
-				hand if the other team calls the renege before the last trick. Set this before the deal; it's
-				locked once the game starts.
-			</span>
-		</span>
-	</label>
+		<div class="mx-auto flex w-full max-w-sm flex-col items-center gap-2 sm:gap-3">
+			<div class="flex flex-wrap items-center justify-center gap-3">
+				<button
+					onclick={fillWithBots}
+					disabled={filled}
+					class="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20 disabled:opacity-40"
+				>
+					Fill empty seats with computers
+				</button>
+				<button
+					onclick={deal}
+					disabled={!filled || !hasHuman}
+					class="rounded-lg bg-green-500 px-6 py-2 font-bold text-green-950 hover:bg-green-400 disabled:opacity-40"
+					title={!filled ? 'All four seats must be filled' : ''}
+				>
+					Deal
+				</button>
+			</div>
 
-	{#if codesUsable}
-		<label
-			class="flex max-w-sm cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-4 py-3 text-sm ring-1 ring-white/10"
-		>
-			<input
-				type="checkbox"
-				class="mt-0.5 h-4 w-4 accent-amber-400"
-				checked={listed}
-				onchange={toggleListed}
-			/>
-			<span>
-				<span class="font-semibold">Public game</span>
-				<span class="mt-0.5 block text-white/50">
-					Lists this game on the join screen so anyone can drop in while you wait. It comes off the
-					list automatically once all four seats are filled or the first hand is dealt.
+			<div
+				class="flex w-full flex-col gap-2 rounded-lg bg-white/5 px-4 py-2.5 text-sm ring-1 ring-white/10"
+			>
+				<div class="flex items-center justify-between gap-3">
+					<span class="font-semibold">Computer skill</span>
+					<div class="flex overflow-hidden rounded-md ring-1 ring-white/15">
+						{#each DIFFICULTIES as level (level)}
+							<button
+								type="button"
+								onclick={() => chooseDifficulty(level)}
+								class="px-3 py-1 text-xs font-semibold capitalize transition-colors {difficulty ===
+								level
+									? 'bg-amber-400 text-green-950'
+									: 'text-white/70 hover:bg-white/10'}"
+							>
+								{level}
+							</button>
+						{/each}
+					</div>
+				</div>
+				<!-- Description collapses behind a toggle (plan §8) so the box's
+				     own height doesn't force the screen to scroll; the wording is
+				     unchanged, just hidden until asked for. -->
+				<details class="text-white/50">
+					<summary class="cursor-pointer text-xs text-white/40 select-none">What's this?</summary>
+					<span class="mt-1 block">
+						How sharp the computer players are. Expert never makes a mistake; Normal slips
+						occasionally; Easy plays like a beginner. You can change this any time.
+					</span>
+				</details>
+			</div>
+
+			<label
+				class="flex w-full cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-4 py-2.5 text-sm ring-1 ring-white/10"
+			>
+				<input
+					type="checkbox"
+					class="mt-0.5 h-4 w-4 accent-amber-400"
+					checked={learning}
+					onchange={toggleLearning}
+				/>
+				<span class="min-w-0">
+					<span class="font-semibold">Learning mode</span>
+					<details class="text-white/50">
+						<summary class="cursor-pointer text-xs text-white/40 select-none">What's this?</summary>
+						<span class="mt-0.5 block">
+							For players still getting the hang of it. The game enforces follow-suit so you can't
+							renege, and a “Learn” button at the table gives each player plain-language help about
+							the up-card, meld, and whose-turn rules for whatever's on the table right now.
+							<br />
+							Leave it off for the normal game: players may play any card, and an illegal one only costs
+							the hand if the other team calls the renege before the last trick. Set this before the deal;
+							it's locked once the game starts.
+						</span>
+					</details>
 				</span>
-			</span>
-		</label>
-	{/if}
+			</label>
+
+			{#if codesUsable}
+				<label
+					class="flex w-full cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-4 py-2.5 text-sm ring-1 ring-white/10"
+				>
+					<input
+						type="checkbox"
+						class="mt-0.5 h-4 w-4 accent-amber-400"
+						checked={listed}
+						onchange={toggleListed}
+					/>
+					<span class="min-w-0">
+						<span class="font-semibold">Public game</span>
+						<details class="text-white/50">
+							<summary class="cursor-pointer text-xs text-white/40 select-none"
+								>What's this?</summary
+							>
+							<span class="mt-0.5 block">
+								Lists this game on the join screen so anyone can drop in while you wait. It comes
+								off the list automatically once all four seats are filled or the first hand is
+								dealt.
+							</span>
+						</details>
+					</span>
+				</label>
+			{/if}
+		</div>
+	</div>
 </div>
 
 <style>
@@ -261,9 +288,12 @@
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		grid-template-rows: repeat(3, auto);
-		gap: 1rem;
+		gap: clamp(0.4rem, 2.5vw, 1rem);
 		place-items: center;
-		width: min(90vw, 620px);
+		/* `100%` of its grid track, not the viewport — the track is already the
+		   full lobby width in portrait and half of it in short-landscape's
+		   two-column layout, so this can't bleed into the settings column. */
+		width: min(100%, 460px);
 	}
 	.area-top {
 		grid-area: 1 / 2;

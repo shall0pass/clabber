@@ -85,7 +85,14 @@
 	});
 </script>
 
-<div class="fixed right-3 bottom-3 z-30 flex flex-col items-end">
+<!-- Docks above the hand (plan §6) via `--dock-bottom`, which Table publishes
+     on `document.documentElement` while a game is live (0 in the lobby, where
+     there's no hand to clear). ChatBox is rendered outside Table
+     (`+page.svelte`), so a shared CSS custom property is the mechanism. -->
+<div
+	class="fixed right-3 z-30 flex flex-col items-end"
+	style="bottom: calc(var(--dock-bottom, 0px) + 0.75rem)"
+>
 	{#if open}
 		<div
 			class="mb-2 flex h-80 w-72 max-w-[calc(100vw-1.5rem)] flex-col rounded-xl bg-green-950/95 shadow-xl ring-1 ring-white/15"
@@ -147,7 +154,11 @@
 			: 'bg-green-950/85 text-white/80 ring-white/15 hover:text-white'}"
 		aria-expanded={open}
 	>
-		💬 Chat{unread > 0 ? ` · ${unread > 9 ? '9+' : unread} new` : ''}
+		<!-- Icon only below 360px, where the word doesn't fit beside my plate
+		     (the red dot below still flags unread messages). -->
+		💬<span class="ml-1 max-[359px]:sr-only"
+			>Chat{unread > 0 ? ` · ${unread > 9 ? '9+' : unread} new` : ''}</span
+		>
 		{#if unread > 0}
 			<span class="absolute -top-1 -right-1 flex h-3.5 w-3.5" aria-hidden="true">
 				<span

@@ -1,2 +1,17 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
+
+/* Short landscape (roughly every phone in landscape) — matches `compact` in
+   src/lib/layout/tableLayout.ts. Used by screens that don't read that module
+   (Lobby, JoinScreen) to switch to a two-column arrangement. */
+@custom-variant short-landscape (@media (orientation: landscape) and (max-height: 500px));
+
+/* Each screen (join/lobby/table) sizes itself to `h-dvh` and never grows past
+   it — see docs/responsive-layout-plan.md §1/§9. `overscroll-behavior: none`
+   stops the rubber-band bounce some mobile browsers do past the edge of a
+   fixed-height page, which otherwise flashes the default white background. */
+html,
+body {
+	overscroll-behavior: none;
+	background: #14532d; /* green-900, matches the table felt */
+}

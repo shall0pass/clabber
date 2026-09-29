@@ -101,146 +101,171 @@
 </div>
 
 {#if showModal && last}
-	<div class="fixed inset-0 z-30 grid place-items-center bg-black/50 p-2 sm:p-4">
+	<!-- `pb-22`: the viewport's bottom strip stays clear for the Learn / Log /
+	     Chat toggles, which dock there while this is up (Table's
+	     `--dock-bottom`), so they never cover the breakdown. -->
+	<div
+		class="fixed inset-0 z-30 grid place-items-center bg-black/50 px-2 pt-2 pb-22 sm:px-4 sm:pt-4"
+	>
+		<!-- Short landscape (plan §7): two columns instead of one long stack — the
+		     score table on the left, Continue/renege/waiting on the right — so
+		     the non-renege case fits 667×375 without the `overflow-y-auto`
+		     safety net ever kicking in. `contents` in the normal case makes each
+		     wrapper transparent to layout, so the two groups just stack in this
+		     card's own flex column as before. -->
 		<div
-			class="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-green-950 p-4 text-white ring-1 ring-white/15 sm:p-6"
+			data-hand-scored-modal
+			class="flex max-h-[calc(100dvh-6rem)] w-full max-w-sm flex-col overflow-y-auto rounded-2xl bg-green-950 p-4 text-white ring-1 ring-white/15 sm:p-6 short-landscape:grid short-landscape:max-w-2xl short-landscape:grid-cols-2 short-landscape:items-start short-landscape:gap-4 short-landscape:p-3"
 		>
-			<h2 class="mb-1 text-lg font-bold">{last.renege ? 'Renege!' : 'Hand scored'}</h2>
-			<p class="mb-4 text-sm text-white/60">
-				{#if last.renege}
-					A player reneged — the other team takes 162 plus their meld.
-				{:else}
-					{makerLabel(last)} made {SUIT_NAME[last.trump]}{last.set ? ' — and went set.' : '.'}
-				{/if}
-			</p>
+			<div class="contents short-landscape:block">
+				<h2 class="mb-1 text-lg font-bold">{last.renege ? 'Renege!' : 'Hand scored'}</h2>
+				<p class="mb-4 text-sm text-white/60">
+					{#if last.renege}
+						A player reneged — the other team takes 162 plus their meld.
+					{:else}
+						{makerLabel(last)} made {SUIT_NAME[last.trump]}{last.set ? ' — and went set.' : '.'}
+					{/if}
+				</p>
 
-			<table class="w-full text-sm">
-				<thead class="text-white/40">
-					<tr>
-						<th class="text-left font-normal"></th>
-						<th class="text-right font-normal">{usLabel}</th>
-						<th class="text-right font-normal">{themLabel}</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr>
-						<td class="py-0.5 text-white/60">Tricks</td>
-						<td class="text-right">{last.trickPoints[myTeam]}</td>
-						<td class="text-right">{last.trickPoints[myTeam ^ 1]}</td>
-					</tr>
-					<tr>
-						<td class="py-0.5 text-white/60">Meld</td>
-						<td class="text-right">{last.meldPoints[myTeam]}</td>
-						<td class="text-right">{last.meldPoints[myTeam ^ 1]}</td>
-					</tr>
-					<tr class="border-t border-white/10 font-semibold">
-						<td class="py-1">Awarded</td>
-						<td class="text-right">{last.awarded[myTeam]}</td>
-						<td class="text-right">{last.awarded[myTeam ^ 1]}</td>
-					</tr>
-					<tr class="text-white/70">
-						<td class="py-0.5">Game</td>
-						<td class="text-right">{last.runningAfter[myTeam]}</td>
-						<td class="text-right">{last.runningAfter[myTeam ^ 1]}</td>
-					</tr>
-				</tbody>
-			</table>
+				<table class="w-full text-sm">
+					<thead class="text-white/40">
+						<tr>
+							<th class="text-left font-normal"></th>
+							<th class="text-right font-normal">{usLabel}</th>
+							<th class="text-right font-normal">{themLabel}</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="py-0.5 text-white/60">Tricks</td>
+							<td class="text-right">{last.trickPoints[myTeam]}</td>
+							<td class="text-right">{last.trickPoints[myTeam ^ 1]}</td>
+						</tr>
+						<tr>
+							<td class="py-0.5 text-white/60">Meld</td>
+							<td class="text-right">{last.meldPoints[myTeam]}</td>
+							<td class="text-right">{last.meldPoints[myTeam ^ 1]}</td>
+						</tr>
+						<tr class="border-t border-white/10 font-semibold">
+							<td class="py-1">Awarded</td>
+							<td class="text-right">{last.awarded[myTeam]}</td>
+							<td class="text-right">{last.awarded[myTeam ^ 1]}</td>
+						</tr>
+						<tr class="text-white/70">
+							<td class="py-0.5">Game</td>
+							<td class="text-right">{last.runningAfter[myTeam]}</td>
+							<td class="text-right">{last.runningAfter[myTeam ^ 1]}</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 
-			{#if last.renege && doc}
-				{@const callerName = doc.players[doc.renegeCalledBy ?? 0]?.name ?? 'a player'}
-				{@const offenderName = doc.renege
-					? (doc.players[doc.renege.seat]?.name ?? 'a player')
-					: null}
-				<div class="mt-4 rounded-lg bg-red-950/60 p-3 ring-1 ring-red-400/30">
-					<p class="text-xs text-red-100">
-						Renege called by <strong class="text-amber-300">{callerName}</strong>{#if offenderName}
-							&nbsp;on <strong>{offenderName}</strong>{/if}.
-					</p>
-					{#if doc.trickHistory.length}
-						<p class="mt-2 mb-1 text-[10px] tracking-wide text-white/40 uppercase">
-							All tricks this hand, in order
+			<div class="contents short-landscape:flex short-landscape:flex-col short-landscape:gap-2">
+				{#if last.renege && doc}
+					{@const callerName = doc.players[doc.renegeCalledBy ?? 0]?.name ?? 'a player'}
+					{@const offenderName = doc.renege
+						? (doc.players[doc.renege.seat]?.name ?? 'a player')
+						: null}
+					<div
+						class="mt-4 rounded-lg bg-red-950/60 p-3 ring-1 ring-red-400/30 short-landscape:mt-0"
+					>
+						<p class="text-xs text-red-100">
+							Renege called by <strong class="text-amber-300">{callerName}</strong
+							>{#if offenderName}
+								&nbsp;on <strong>{offenderName}</strong>{/if}.
 						</p>
-						<div bind:clientWidth={trickRowWidth}>
-							<!-- One column per seat, so a seat's plays read straight down. -->
-							<div class="mb-1 grid grid-cols-4 gap-1">
-								{#each SEATS as seat (seat)}
-									<span class="truncate text-center text-[9px] text-white/40"
-										>{doc.players[seat]?.name ?? `seat ${seat}`}</span
-									>
-								{/each}
-							</div>
-							<div class="flex flex-col gap-2">
-								{#each doc.trickHistory as trick, i (i)}
-									<div>
-										<p class="mb-0.5 text-[9px] text-white/35">Trick {i + 1}</p>
-										<div class="grid grid-cols-4 gap-1">
-											{#each trick.bySeat as card, seat (seat)}
-												<div class="flex justify-center" class:opacity-50={seat !== trick.winner}>
-													<Card {card} height={trickCardHeight} />
-												</div>
-											{/each}
+						{#if doc.trickHistory.length}
+							<p class="mt-2 mb-1 text-[10px] tracking-wide text-white/40 uppercase">
+								All tricks this hand, in order
+							</p>
+							<!-- Its own scrollbox (plan §7: "may scroll inside its own box") —
+							     this is the one piece long enough that two columns alone
+							     don't guarantee it fits at 667×375. -->
+							<div
+								bind:clientWidth={trickRowWidth}
+								class="short-landscape:max-h-40 short-landscape:overflow-y-auto"
+							>
+								<!-- One column per seat, so a seat's plays read straight down. -->
+								<div class="mb-1 grid grid-cols-4 gap-1">
+									{#each SEATS as seat (seat)}
+										<span class="truncate text-center text-[9px] text-white/40"
+											>{doc.players[seat]?.name ?? `seat ${seat}`}</span
+										>
+									{/each}
+								</div>
+								<div class="flex flex-col gap-2">
+									{#each doc.trickHistory as trick, i (i)}
+										<div>
+											<p class="mb-0.5 text-[9px] text-white/35">Trick {i + 1}</p>
+											<div class="grid grid-cols-4 gap-1">
+												{#each trick.bySeat as card, seat (seat)}
+													<div class="flex justify-center" class:opacity-50={seat !== trick.winner}>
+														<Card {card} height={trickCardHeight} />
+													</div>
+												{/each}
+											</div>
 										</div>
-									</div>
-								{/each}
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+				{/if}
+
+				{#if mayCallRenege}
+					{#if !pendingRenege}
+						<button
+							onclick={() => (pendingRenege = true)}
+							class="mt-5 w-full rounded-lg bg-red-500/15 py-1.5 text-xs font-semibold text-red-200 ring-1 ring-red-400/40 hover:bg-red-500/25 short-landscape:mt-0"
+						>
+							Call renege
+						</button>
+					{:else}
+						<div
+							class="mt-5 flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/60 short-landscape:mt-0"
+						>
+							<p class="text-xs text-red-100">
+								{#if advanced}
+									Call a renege on the other team? If they didn't break a rule, the penalty falls on
+									your team instead.
+								{:else}
+									Call the renege on the other team? Your team takes 162 plus any meld and the hand
+									is re-scored.
+								{/if}
+							</p>
+							<div class="flex gap-2">
+								<button
+									onclick={() => (pendingRenege = false)}
+									class="rounded-lg bg-white/10 px-3 py-1 text-xs font-semibold hover:bg-white/20"
+								>
+									Cancel
+								</button>
+								<button
+									onclick={callRenege}
+									class="rounded-lg bg-red-500 px-3 py-1 text-xs font-semibold text-white hover:bg-red-400"
+								>
+									Call renege
+								</button>
 							</div>
 						</div>
 					{/if}
-				</div>
-			{/if}
-
-			{#if mayCallRenege}
-				{#if !pendingRenege}
-					<button
-						onclick={() => (pendingRenege = true)}
-						class="mt-5 w-full rounded-lg bg-red-500/15 py-1.5 text-xs font-semibold text-red-200 ring-1 ring-red-400/40 hover:bg-red-500/25"
-					>
-						Call renege
-					</button>
-				{:else}
-					<div
-						class="mt-5 flex flex-col items-center gap-2 rounded-xl bg-red-950/90 px-4 py-3 text-center ring-1 ring-red-400/60"
-					>
-						<p class="text-xs text-red-100">
-							{#if advanced}
-								Call a renege on the other team? If they didn't break a rule, the penalty falls on
-								your team instead.
-							{:else}
-								Call the renege on the other team? Your team takes 162 plus any meld and the hand is
-								re-scored.
-							{/if}
-						</p>
-						<div class="flex gap-2">
-							<button
-								onclick={() => (pendingRenege = false)}
-								class="rounded-lg bg-white/10 px-3 py-1 text-xs font-semibold hover:bg-white/20"
-							>
-								Cancel
-							</button>
-							<button
-								onclick={callRenege}
-								class="rounded-lg bg-red-500 px-3 py-1 text-xs font-semibold text-white hover:bg-red-400"
-							>
-								Call renege
-							</button>
-						</div>
-					</div>
 				{/if}
-			{/if}
 
-			{#if mySeat != null}
-				<button
-					onclick={ackHand}
-					disabled={iAcked}
-					class="mt-5 w-full rounded-lg bg-green-500 py-2 font-semibold text-green-950 hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-60"
-				>
-					{iAcked ? 'Waiting for the table…' : 'Continue'}
-				</button>
-			{/if}
-			{#if waitingOn.length}
-				<p class="mt-2 text-center text-[11px] text-white/35">
-					Waiting on {waitingOn.join(', ')} to press Continue.
-				</p>
-			{/if}
+				{#if mySeat != null}
+					<button
+						onclick={ackHand}
+						disabled={iAcked}
+						class="mt-5 w-full rounded-lg bg-green-500 py-2 font-semibold text-green-950 hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-60 short-landscape:mt-0"
+					>
+						{iAcked ? 'Waiting for the table…' : 'Continue'}
+					</button>
+				{/if}
+				{#if waitingOn.length}
+					<p class="mt-2 text-center text-[11px] text-white/35 short-landscape:mt-0">
+						Waiting on {waitingOn.join(', ')} to press Continue.
+					</p>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}

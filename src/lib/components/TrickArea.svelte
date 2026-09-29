@@ -7,25 +7,33 @@
 		doc,
 		baseSeat = 0,
 		handPoints = [0, 0],
-		scale = 1,
-		winner = null
+		cardH: cardHProp = 110,
+		winner = null,
+		learning = false
 	}: {
 		doc: GameDoc;
 		/** the seat rendered at the bottom of the table */
 		baseSeat?: Seat;
 		/** trick points banked so far this hand, [team0, team1] */
 		handPoints?: [number, number];
-		/** shrink factor for small screens */
-		scale?: number;
+		/** played-card height, px — from `computeTableLayout`'s `trickCardH`
+		 *  (viewport-only; never game state, so this never jitters) */
+		cardH?: number;
 		/** while a finished trick is held on screen, the seat that took it */
 		winner?: Seat | null;
+		/** Learning mode is on — shown as a small chip on the puck rather than in
+		 *  the top band, which must stay one line at every width (follow-up pass
+		 *  on docs/responsive-layout-plan.md): a chip absolutely positioned on a
+		 *  fixed-size circle can never cause a wrap, unlike text in a flex row. */
+		learning?: boolean;
 	} = $props();
 
 	// Big, readable played cards around a central puck that shows trump / trick /
 	// score. `gap` is the clear ring between the puck and the inner edge of each
 	// card, so the puck text is never covered.
-	const cardH = $derived(Math.round(110 * scale));
+	const cardH = $derived(Math.round(cardHProp));
 	const cardW = $derived(Math.round(cardH * (64 / 89)));
+	const scale = $derived(cardH / 110);
 	const puck = $derived(Math.round(116 * scale));
 	const gap = $derived(Math.round(puck / 2 + 12 * scale));
 
@@ -48,8 +56,9 @@
 	const trump = $derived(doc.trump);
 </script>
 
-<div class="relative" style:width="{boxW}px" style:height="{boxH}px">
+<div class="relative" data-card-h={cardH} style:width="{boxW}px" style:height="{boxH}px">
 	<div
+		data-puck
 		class="absolute top-1/2 left-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-center leading-tight"
 		style:width="{puck}px"
 		style:height="{puck}px"
@@ -67,6 +76,15 @@
 			{/if}
 			<div class="text-[11px] text-white/45">{handPoints[0]} – {handPoints[1]} pts</div>
 		</div>
+
+		{#if learning}
+			<span
+				class="absolute right-0 bottom-0 rounded-full bg-amber-400 px-1 text-[8px] font-bold text-green-950 uppercase"
+				title="Learning mode"
+			>
+				L
+			</span>
+		{/if}
 	</div>
 
 	{#each plays as play (play.seat)}
